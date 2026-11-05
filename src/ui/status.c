@@ -260,7 +260,7 @@ static void zf_status_draw_callback(Canvas *canvas, void *model) {
 
         if (status->transport_mode == ZfTransportModeNfc) {
             icon = &I_Connected_62x31;
-            text = "Hold near the phone";
+            text = "Tap phone / plug USB";
         } else if (status->status == ZfHomeStatusConnected) {
             icon = &I_Connected_62x31;
             text = "Connected!";

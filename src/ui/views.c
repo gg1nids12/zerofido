@@ -30,6 +30,8 @@
 #include "../zerofido_store.h"
 #include "../pin/vault.h"
 #include "../store/binding.h"
+#include "../zerofido_trace.h"
+#include <furi_hal_power.h>
 #include "../zerofido_ui_i.h"
 #include "status.h"
 #include "../app/lifecycle.h"
@@ -1632,12 +1634,61 @@ static bool zerofido_navigation_callback(void *context) {
     return true;
 }
 
+/*
+ * tpm branch (2026-11-05): one app for every mode (owner: "whoever connects,
+ * we work with"). A USB cable (VBUS present) selects USB HID; no cable selects
+ * NFC for phones. Only one transport runs at a time — both together do not fit
+ * the Momentum heap. Switches after ~1.5 s of a stable cable state, never
+ * during a pending approval.
+ */
+static void zerofido_auto_transport_tick(ZerofidoApp *app) {
+#if defined(ZF_USB_ONLY) || defined(ZF_NFC_ONLY)
+    UNUSED(app);
+#else
+    static uint32_t last_check = 0;
+    static uint8_t stable = 0;
+    static bool last_cable = false;
+    uint32_t now = furi_get_tick();
+    bool cable = false;
+    bool busy = false;
+    ZfTransportMode want;
+
+    if ((uint32_t)(now - last_check) < 500U) {
+        return;
+    }
+    last_check = now;
+    cable = furi_hal_power_get_usb_voltage() > 4.0f;
+    if (cable != last_cable) {
+        last_cable = cable;
+        stable = 0;
+        return;
+    }
+    if (stable < 3U) {
+        stable++;
+        return;
+    }
+    want = cable ? ZfTransportModeUsbHid : ZfTransportModeNfc;
+    furi_mutex_acquire(app->ui_mutex, FuriWaitForever);
+    busy = app->approval.state == ZfApprovalPending || app->maintenance_busy ||
+           !app->startup_complete || app->runtime_config.transport_mode == want;
+    furi_mutex_release(app->ui_mutex);
+    if (busy) {
+        return;
+    }
+    bool ok = zf_app_lifecycle_switch_transport_runtime(app, want);
+    ZF_TRACE(app->storage, "AUTO mode=%s ok=%d free=%u maxblk=%u", cable ? "usb" : "nfc", ok ? 1 : 0,
+             (unsigned)memmgr_get_free_heap(), (unsigned)memmgr_heap_get_max_free_block());
+    zerofido_ui_refresh_status(app);
+#endif
+}
+
 static void zerofido_tick_callback(void *context) {
     ZerofidoApp *app = context;
     ZfViewId active_view = ZfViewStatus;
 
     furi_assert(app);
     zf_vault_tick(); /* tpm branch: wipe the PMK after its timeout */
+    zerofido_auto_transport_tick(app);
     zf_app_lifecycle_startup_pending(app);
     if (zerofido_ui_expire_pending_interaction(app)) {
         zerofido_ui_dispatch_custom_event(app, ZfEventApprovalTimeout);

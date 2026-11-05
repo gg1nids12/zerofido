@@ -470,6 +470,38 @@ bool zf_app_lifecycle_restart_transport(ZerofidoApp *app) {
     return zf_app_lifecycle_start_worker(app);
 }
 
+/*
+ * tpm branch (2026-11-05): switch the active transport without saving it.
+ * Used by the automatic cable-based switch (cable -> USB, no cable -> NFC).
+ */
+bool zf_app_lifecycle_switch_transport_runtime(ZerofidoApp *app, ZfTransportMode mode) {
+#if defined(ZF_USB_ONLY) || defined(ZF_NFC_ONLY)
+    UNUSED(app);
+    UNUSED(mode);
+    return false;
+#else
+    ZfRuntimeConfig previous_config;
+    ZfRuntimeConfig next_config;
+
+    if (!app || (mode != ZfTransportModeUsbHid && mode != ZfTransportModeNfc)) {
+        return false;
+    }
+    previous_config = app->runtime_config;
+    if (previous_config.transport_mode == mode) {
+        return true;
+    }
+    next_config = previous_config;
+    next_config.transport_mode = mode;
+    zf_runtime_config_apply(app, &next_config);
+    if (!zf_app_lifecycle_restart_transport(app)) {
+        zf_runtime_config_apply(app, &previous_config);
+        (void)zf_app_lifecycle_restart_transport(app);
+        return false;
+    }
+    return true;
+#endif
+}
+
 bool zf_app_lifecycle_set_transport_mode(ZerofidoApp *app, Storage *storage, ZfTransportMode mode) {
     ZfRuntimeConfig previous_config;
     ZfRuntimeConfig next_config;
