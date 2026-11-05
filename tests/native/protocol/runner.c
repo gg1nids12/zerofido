@@ -1265,6 +1265,14 @@ ZfApprovalState zerofido_ui_get_interaction_state(ZerofidoApp *app) {
     return g_approval_state;
 }
 
+/* tpm branch: counts keepalives sent while the PIN vault stretch runs. */
+static unsigned g_processing_keepalive_count = 0;
+void zf_transport_processing_keepalive(ZerofidoApp *app, ZfTransportSessionId current_session_id) {
+    UNUSED(app);
+    UNUSED(current_session_id);
+    g_processing_keepalive_count++;
+}
+
 uint8_t zf_transport_poll_cbor_control(ZerofidoApp *app, uint32_t current_cid) {
     UNUSED(app);
     UNUSED(current_cid);

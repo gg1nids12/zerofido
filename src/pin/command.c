@@ -20,6 +20,8 @@
 #include "../zerofido_app_i.h"
 #include "../zerofido_usb_diagnostics.h"
 #include "client_pin/internal.h"
+#include "vault.h"
+#include "../transport/adapter.h"
 
 static ZfClientPinCommandScratch *zf_pin_command_scratch(ZerofidoApp *app) {
     return zf_app_command_scratch_acquire(app, sizeof(ZfClientPinCommandScratch));
@@ -142,6 +144,18 @@ static const char *zf_pin_subcommand_tag(uint64_t subcommand) {
  * CBOR, protocol keys, decrypted PIN material, and tokens and is zeroed before
  * release.
  */
+/* tpm branch: keepalive while the vault stretch runs inside a PIN subcommand. */
+typedef struct {
+    ZerofidoApp *app;
+    ZfTransportSessionId session_id;
+} ZfPinProgressContext;
+
+static void zf_pin_vault_progress(void *context) {
+    ZfPinProgressContext *progress = context;
+
+    zf_transport_processing_keepalive(progress->app, progress->session_id);
+}
+
 uint8_t zerofido_pin_handle_command_with_session(ZerofidoApp *app, ZfTransportSessionId session_id,
                                                  const uint8_t *request, size_t request_len,
                                                  uint8_t *out, size_t out_capacity,
@@ -155,6 +169,7 @@ uint8_t zerofido_pin_handle_command_with_session(ZerofidoApp *app, ZfTransportSe
 #endif
     bool pin_set_before = false;
     uint8_t status = ZF_CTAP_ERR_OTHER;
+    ZfPinProgressContext progress = {0};
 
     if (!scratch) {
         ZF_PIN_DIAG("cmd=CP scratch oom");
@@ -187,6 +202,9 @@ uint8_t zerofido_pin_handle_command_with_session(ZerofidoApp *app, ZfTransportSe
         goto cleanup;
     }
 
+    progress.app = app;
+    progress.session_id = session_id;
+    zf_vault_set_progress(zf_pin_vault_progress, &progress);
     switch (parsed->subcommand) {
     case ZF_CLIENT_PIN_SUBCMD_GET_RETRIES:
         status = zf_client_pin_response_retries(state, out, out_capacity, out_len);
@@ -222,6 +240,7 @@ uint8_t zerofido_pin_handle_command_with_session(ZerofidoApp *app, ZfTransportSe
         zf_runtime_config_refresh_capabilities(app);
     }
 cleanup:
+    zf_vault_set_progress(NULL, NULL);
 #if ZF_RELEASE_DIAGNOSTICS
     zf_pin_log_result(diagnostic_tag, status);
 #endif

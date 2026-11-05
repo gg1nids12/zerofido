@@ -28,6 +28,8 @@
 #include "../zerofido_ctap.h"
 #include "../zerofido_notify.h"
 #include "../zerofido_store.h"
+#include "../pin/vault.h"
+#include "../store/binding.h"
 #include "../zerofido_ui_i.h"
 #include "status.h"
 #include "../app/lifecycle.h"
@@ -927,7 +929,7 @@ static void zerofido_pin_input_result_callback(void *context) {
     case ZfPinInputSetNew:
         strncpy(pin_buffers->new_pin, pin_buffers->input, sizeof(pin_buffers->new_pin) - 1);
         pin_buffers->new_pin[sizeof(pin_buffers->new_pin) - 1] = '\0';
-        zerofido_open_pin_input(app, ZfPinInputSetConfirm, "Confirm new PIN", 4);
+        zerofido_open_pin_input(app, ZfPinInputSetConfirm, "Confirm new PIN", ZF_MIN_PIN_LENGTH);
         return;
     case ZfPinInputSetConfirm:
         if (!zerofido_begin_local_maintenance(app)) {
@@ -941,12 +943,12 @@ static void zerofido_pin_input_result_callback(void *context) {
     case ZfPinInputChangeCurrent:
         strncpy(pin_buffers->current, pin_buffers->input, sizeof(pin_buffers->current) - 1);
         pin_buffers->current[sizeof(pin_buffers->current) - 1] = '\0';
-        zerofido_open_pin_input(app, ZfPinInputChangeNew, "Enter new PIN", 4);
+        zerofido_open_pin_input(app, ZfPinInputChangeNew, "New PIN, 10+ chars", ZF_MIN_PIN_LENGTH);
         return;
     case ZfPinInputChangeNew:
         strncpy(pin_buffers->new_pin, pin_buffers->input, sizeof(pin_buffers->new_pin) - 1);
         pin_buffers->new_pin[sizeof(pin_buffers->new_pin) - 1] = '\0';
-        zerofido_open_pin_input(app, ZfPinInputChangeConfirm, "Confirm new PIN", 4);
+        zerofido_open_pin_input(app, ZfPinInputChangeConfirm, "Confirm new PIN", ZF_MIN_PIN_LENGTH);
         return;
     case ZfPinInputChangeConfirm:
         if (!zerofido_begin_local_maintenance(app)) {
@@ -1010,9 +1012,17 @@ static void zerofido_pin_confirm_result_callback(DialogExResult result, void *co
                 uint8_t status = zerofido_pin_verify_plaintext(app->storage, &app->pin_state,
                                                                pin_buffers->current);
                 if (status == ZF_CTAP_SUCCESS) {
-                    action_ok = zerofido_pin_clear(app->storage, &app->pin_state);
+                    /*
+                     * tpm branch: the PIN check above opened the vault. Move
+                     * PIN-bound passkeys back to the device key first, so they
+                     * survive PIN removal; keep the PIN if that fails.
+                     */
+                    /* Local maintenance (begin above) keeps CTAP off the store. */
+                    bool unbound = zf_store_unbind_all(app->storage, &app->store);
+                    action_ok = unbound && zerofido_pin_clear(app->storage, &app->pin_state);
+                    zf_vault_lock();
                     if (!action_ok) {
-                        failure_status = "PIN removal failed";
+                        failure_status = unbound ? "PIN removal failed" : "Passkey unbind failed";
                     }
                 } else {
                     failure_status = zerofido_pin_status_text(status);
@@ -1101,7 +1111,7 @@ static void zerofido_pin_menu_callback(void *context, uint32_t index) {
     switch (index) {
     case ZfPinMenuItemSet:
         zerofido_pin_reset_buffers(app);
-        zerofido_open_pin_input(app, ZfPinInputSetNew, "Enter new PIN", 4);
+        zerofido_open_pin_input(app, ZfPinInputSetNew, "New PIN, 10+ chars", ZF_MIN_PIN_LENGTH);
         break;
     case ZfPinMenuItemChange:
         zerofido_pin_reset_buffers(app);
@@ -1616,6 +1626,7 @@ static void zerofido_tick_callback(void *context) {
     ZfViewId active_view = ZfViewStatus;
 
     furi_assert(app);
+    zf_vault_tick(); /* tpm branch: wipe the PMK after its timeout */
     zf_app_lifecycle_startup_pending(app);
     if (zerofido_ui_expire_pending_interaction(app)) {
         zerofido_ui_dispatch_custom_event(app, ZfEventApprovalTimeout);

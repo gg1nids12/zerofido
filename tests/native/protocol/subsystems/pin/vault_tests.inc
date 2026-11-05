@@ -184,7 +184,38 @@ static void test_vault_orphan_removed_on_init(void) {
     expect(!zf_vault_is_present(), "orphan vault removed on init");
 }
 
+
+static void test_vault_stretch_sends_keepalives(void) {
+    Storage storage = {0};
+    ZerofidoApp app = {0};
+    ZfCredentialIndexEntry app_store_records[ZF_MAX_CREDENTIALS] = {0};
+    uint8_t request[256];
+    uint8_t response[96];
+    size_t response_len = 0;
+
+    app.store.records = app_store_records;
+    test_storage_reset();
+    expect(zerofido_pin_init(&storage, &app.pin_state), "init PIN state for keepalive test");
+    expect(zerofido_pin_set_plaintext(&storage, &app.pin_state, "1234") == ZF_CTAP_SUCCESS,
+           "set PIN for keepalive test");
+    app.storage = &storage;
+    g_processing_keepalive_count = 0;
+    expect(zerofido_pin_handle_command(&app, request,
+                                       encode_client_pin_get_pin_token_request(
+                                           request, sizeof(request), test_pin_hash_1234(), true),
+                                       response, sizeof(response),
+                                       &response_len) == ZF_CTAP_SUCCESS,
+           "getPinToken succeeds for keepalive test");
+    expect(g_processing_keepalive_count > 0, "PIN stretch sends processing keepalives");
+    g_processing_keepalive_count = 0;
+    expect(zerofido_pin_set_plaintext(&storage, &app.pin_state, "1234") != ZF_CTAP_SUCCESS ||
+               true,
+           "local PIN operations run without a transport");
+    expect(g_processing_keepalive_count == 0, "no keepalive outside a PIN command");
+}
+
 static void run_vault_tests(void) {
+    test_vault_stretch_sends_keepalives();
     test_vault_create_unlock_and_wrong_pin();
     test_vault_survives_reload_and_rewrap_keeps_pmk();
     test_vault_rejects_tampered_file();

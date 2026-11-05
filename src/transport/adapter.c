@@ -159,3 +159,17 @@ uint8_t zf_transport_poll_cbor_control(ZerofidoApp *app, ZfTransportSessionId cu
 }
 
 #endif
+
+/* tpm branch (2026-11-05): see adapter.h. */
+void zf_transport_processing_keepalive(ZerofidoApp *app, ZfTransportSessionId current_session_id) {
+#if defined(ZF_NFC_ONLY)
+    UNUSED(app);
+    UNUSED(current_session_id);
+#elif defined(ZF_USB_ONLY)
+    zf_transport_usb_hid_processing_keepalive(app, current_session_id);
+#else
+    if (app && app->transport_adapter == &zf_transport_usb_hid_adapter) {
+        zf_transport_usb_hid_processing_keepalive(app, current_session_id);
+    }
+#endif
+}

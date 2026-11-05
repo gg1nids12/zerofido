@@ -38,5 +38,7 @@ bool zf_transport_usb_hid_wait_for_interaction(ZerofidoApp *app,
                                                ZfTransportSessionId current_session_id,
                                                bool *approved);
 void zf_transport_usb_hid_notify_interaction_changed(ZerofidoApp *app);
+void zf_transport_usb_hid_processing_keepalive(ZerofidoApp *app,
+                                               ZfTransportSessionId current_session_id);
 uint8_t zf_transport_usb_hid_poll_cbor_control(ZerofidoApp *app,
                                                ZfTransportSessionId current_session_id);

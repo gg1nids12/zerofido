@@ -36,6 +36,9 @@ typedef struct {
     uint8_t (*poll_cbor_control)(ZerofidoApp *app, ZfTransportSessionId current_session_id);
 } ZfTransportAdapterOps;
 
+/* tpm branch: keepalive during long command work (no-op on NFC). */
+void zf_transport_processing_keepalive(ZerofidoApp *app, ZfTransportSessionId current_session_id);
+
 /*
  * Transport adapters let CTAP/U2F command code be agnostic to USB HID versus
  * NFC. Each adapter owns its worker loop, response publication, keepalive/cancel

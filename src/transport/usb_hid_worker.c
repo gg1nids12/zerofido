@@ -347,6 +347,28 @@ uint8_t zf_transport_usb_hid_poll_cbor_control(ZerofidoApp *app,
     return ZF_CTAP_SUCCESS;
 }
 
+/*
+ * tpm branch (2026-11-05): keepalive (STATUS_PROCESSING) while a long
+ * computation runs in the command, e.g. the PIN vault stretch (~1 s).
+ * Rate-limited to the CTAPHID keepalive interval; drains INIT/CANCEL.
+ */
+void zf_transport_usb_hid_processing_keepalive(ZerofidoApp *app,
+                                               ZfTransportSessionId current_session_id) {
+    static uint32_t last_sent = 0;
+    ZfTransportState *transport = app ? app->transport_state : NULL;
+    uint32_t now = furi_get_tick();
+
+    if (!transport || !transport->processing || transport->cmd != ZF_CTAPHID_CBOR ||
+        transport->cid != current_session_id ||
+        (uint32_t)(now - last_sent) < ZF_KEEPALIVE_INTERVAL_MS) {
+        return;
+    }
+    last_sent = now;
+    zf_transport_session_send_frames(current_session_id, ZF_CTAPHID_KEEPALIVE,
+                                     (const uint8_t[]){0x01}, 1);
+    (void)zf_transport_usb_hid_poll_cbor_control(app, current_session_id);
+}
+
 /* Waits for user approval while continuing keepalives and cancellation handling. */
 bool zf_transport_usb_hid_wait_for_interaction(ZerofidoApp *app,
                                                ZfTransportSessionId current_session_id,

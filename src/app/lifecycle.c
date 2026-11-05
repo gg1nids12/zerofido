@@ -30,6 +30,7 @@
 #include "../zerofido_crypto.h"
 #include "../zerofido_notify.h"
 #include "../zerofido_pin.h"
+#include "../pin/vault.h"
 #include "../zerofido_runtime_config.h"
 #include "../zerofido_store.h"
 #include "../zerofido_telemetry.h"
@@ -516,6 +517,7 @@ void zf_app_lifecycle_shutdown(ZerofidoApp *app) {
     furi_mutex_release(app->ui_mutex);
     zf_app_lifecycle_wait_startup(app);
     zf_app_lifecycle_stop_worker(app);
+    zf_vault_reset_runtime(); /* tpm branch: no PMK survives app exit */
 }
 
 void zf_app_lifecycle_free(ZerofidoApp *app) {
