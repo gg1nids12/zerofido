@@ -77,6 +77,7 @@ uint8_t zf_ctap_handle_make_credential(ZerofidoApp *app, ZfTransportSessionId se
                    "makeCredential scratch exceeds command arena");
 
     ZfMakeCredentialScratch *scratch = zf_ctap_command_scratch(app, sizeof(*scratch));
+    uint32_t started_at = furi_get_tick(); /* tpm branch: trace timing */
     bool uv_verified = false;
     bool resident_key = false;
     bool maintenance_acquired = false;
@@ -317,9 +318,11 @@ cleanup:
     if (status != ZF_CTAP_SUCCESS) {
         FURI_LOG_I("ZeroFIDO:CTAP", "MC error=%02X", status);
     }
+    UNUSED(started_at);
 #else
-    ZF_TRACE(app->storage, "MC st=%02X at=%s rk=%d pa=%d uv=%d vault=%d/%d", status,
-             zf_mc_trace_stage, resident_key ? 1 : 0, scratch->request.has_pin_auth ? 1 : 0,
+    ZF_TRACE(app->storage, "MC st=%02X ms=%lu at=%s rk=%d pa=%d uv=%d vault=%d/%d", status,
+             (unsigned long)(furi_get_tick() - started_at), zf_mc_trace_stage,
+             resident_key ? 1 : 0, scratch->request.has_pin_auth ? 1 : 0,
              uv_verified ? 1 : 0, zf_vault_is_present() ? 1 : 0, zf_vault_is_unlocked() ? 1 : 0);
     zf_mc_trace_stage = "";
 #endif

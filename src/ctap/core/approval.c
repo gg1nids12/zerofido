@@ -16,6 +16,8 @@
  */
 
 #include "approval.h"
+#include <furi.h>
+#include "../../zerofido_trace.h"
 
 #include "../policy.h"
 #include "../../zerofido_app_i.h"
@@ -42,8 +44,15 @@ static uint8_t zf_ctap_status_from_interaction_state(ZfApprovalState state,
 uint8_t zf_ctap_request_approval(ZerofidoApp *app, const char *operation, const char *rp_id,
                                  const char *user_text, ZfTransportSessionId session_id) {
     bool approved = false;
-    if (!zerofido_ui_request_approval(app, ZfUiProtocolFido2, operation, rp_id, user_text,
-                                      session_id, &approved)) {
+    uint32_t asked_at = furi_get_tick();
+    bool answered = false;
+
+    ZF_TRACE(app->storage, "ASK %s", operation ? operation : "?");
+    answered = zerofido_ui_request_approval(app, ZfUiProtocolFido2, operation, rp_id, user_text,
+                                            session_id, &approved);
+    ZF_TRACE(app->storage, "ANS ok=%d wait_ms=%lu", (answered && approved) ? 1 : 0,
+             (unsigned long)(furi_get_tick() - asked_at));
+    if (!answered) {
         return ZF_CTAP_ERR_USER_ACTION_TIMEOUT;
     }
     if (approved) {

@@ -109,11 +109,24 @@ uint8_t zf_pin_auth_failure(Storage *storage, ZfClientPinState *state) {
     return state->pin_auth_blocked ? ZF_CTAP_ERR_PIN_AUTH_BLOCKED : ZF_CTAP_ERR_PIN_INVALID;
 }
 
+/* tpm branch: set when the stored PIN state mirror changed and must be written. */
+static bool zf_pin_mirror_dirty = false;
+
 uint8_t zf_pin_auth_success(Storage *storage, ZfClientPinState *state) {
     uint8_t previous_pin_retries = state->pin_retries;
     uint8_t previous_pin_consecutive_mismatches = state->pin_consecutive_mismatches;
     bool previous_pin_auth_blocked = state->pin_auth_blocked;
 
+    /*
+     * tpm branch (2026-11-05): nothing to write when retries are already full,
+     * nothing is blocked and the verifier mirror did not change. Saves an SD
+     * card write on every sign-in (the owner noticed the delay).
+     */
+    if (previous_pin_retries == ZF_PIN_RETRIES_MAX && previous_pin_consecutive_mismatches == 0 &&
+        !previous_pin_auth_blocked && !zf_pin_mirror_dirty) {
+        return ZF_CTAP_SUCCESS;
+    }
+    zf_pin_mirror_dirty = false;
     state->pin_retries = ZF_PIN_RETRIES_MAX;
     zf_pin_clear_auth_block_state(state);
     if (zf_pin_persist_state(storage, state)) {
@@ -158,12 +171,16 @@ bool zf_pin_check_hash(Storage *storage, ZfClientPinState *state,
     if (zf_vault_is_present()) {
         ok = zf_vault_unlock(pin_hash);
         if (ok && zf_vault_get_verifier(verifier)) {
+            if (!zf_crypto_constant_time_equal(state->pin_hash, verifier, ZF_PIN_HASH_LEN)) {
+                zf_pin_mirror_dirty = true;
+            }
             memcpy(state->pin_hash, verifier, ZF_PIN_HASH_LEN);
         }
     } else {
         ok = zf_crypto_constant_time_equal(pin_hash, state->pin_hash, ZF_PIN_HASH_LEN);
         if (ok && zf_vault_create(storage, pin_hash, verifier)) {
             memcpy(state->pin_hash, verifier, ZF_PIN_HASH_LEN);
+            zf_pin_mirror_dirty = true;
         }
     }
     zf_crypto_secure_zero(verifier, sizeof(verifier));

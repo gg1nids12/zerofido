@@ -284,6 +284,7 @@ uint8_t zf_ctap_handle_get_assertion(ZerofidoApp *app, ZfTransportSessionId sess
                                      const uint8_t *data, size_t data_len, uint8_t *out,
                                      size_t out_capacity, size_t *out_len) {
     ZfGetAssertionScratch *scratch = zf_ctap_command_scratch(app, sizeof(*scratch));
+    uint32_t started_at = furi_get_tick(); /* tpm branch: trace timing */
     size_t match_count = 0;
     bool uv_verified = false;
     bool uses_allow_list = false;
@@ -414,9 +415,12 @@ cleanup:
     if (status != ZF_CTAP_SUCCESS) {
         FURI_LOG_I("ZeroFIDO:CTAP", "GA error=%02X", status);
     }
+    UNUSED(started_at);
 #else
-    ZF_TRACE(app->storage, "GA st=%02X vault=%d/%d", status, zf_vault_is_present() ? 1 : 0,
-             zf_vault_is_unlocked() ? 1 : 0);
+    ZF_TRACE(app->storage, "GA st=%02X ms=%lu up=%d n=%u vault=%d/%d", status,
+             (unsigned long)(furi_get_tick() - started_at),
+             (request && request->has_up && !request->up) ? 0 : 1, (unsigned)match_count,
+             zf_vault_is_present() ? 1 : 0, zf_vault_is_unlocked() ? 1 : 0);
 #endif
     if (maintenance_acquired) {
         zf_ctap_end_maintenance(app);

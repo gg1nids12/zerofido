@@ -171,6 +171,7 @@ uint8_t zerofido_pin_handle_command_with_session(ZerofidoApp *app, ZfTransportSe
     bool pin_set_before = false;
     uint8_t status = ZF_CTAP_ERR_OTHER;
     ZfPinProgressContext progress = {0};
+    uint32_t started_at = furi_get_tick();
 
     if (!scratch) {
         ZF_PIN_DIAG("cmd=CP scratch oom");
@@ -242,10 +243,10 @@ uint8_t zerofido_pin_handle_command_with_session(ZerofidoApp *app, ZfTransportSe
     }
 cleanup:
     zf_vault_set_progress(NULL, NULL);
-    ZF_TRACE(app->storage, "CP sub=%u st=%02X pin=%d vault=%d/%d",
+    ZF_TRACE(app->storage, "CP sub=%u st=%02X ms=%lu pin=%d vault=%d/%d",
              parsed ? (unsigned)parsed->subcommand : 0U, status,
-             app->pin_state.pin_set ? 1 : 0, zf_vault_is_present() ? 1 : 0,
-             zf_vault_is_unlocked() ? 1 : 0);
+             (unsigned long)(furi_get_tick() - started_at), app->pin_state.pin_set ? 1 : 0,
+             zf_vault_is_present() ? 1 : 0, zf_vault_is_unlocked() ? 1 : 0);
 #if ZF_RELEASE_DIAGNOSTICS
     zf_pin_log_result(diagnostic_tag, status);
 #endif
