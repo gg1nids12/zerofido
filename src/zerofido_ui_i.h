@@ -30,3 +30,5 @@ void zerofido_ui_switch_to_view(ZerofidoApp *app, ZfViewId view_id);
 void zerofido_ui_show_interaction(ZerofidoApp *app);
 void zerofido_ui_hide_interaction(ZerofidoApp *app);
 bool zerofido_ui_ensure_view(ZerofidoApp *app, ZfViewId view_id);
+/* tpm branch: binds the U2F-like approval screen to app->approval_view. */
+void zerofido_ui_approval_bind_view(ZerofidoApp *app);

@@ -151,7 +151,7 @@ typedef struct ZerofidoApp {
     TextInput *pin_input_view;
     DialogEx *pin_confirm_view;
     View *credential_detail_view;
-    DialogEx *approval_view;
+    View *approval_view; /* tpm branch: U2F-like approval screen */
     Storage *storage;
     NotificationApp *notifications;
     FuriTimer *notify_timer;

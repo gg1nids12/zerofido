@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <assets_icons.h>
 #include <gui/elements.h>
 
 #include "../zerofido_app_i.h"
@@ -47,6 +48,7 @@ typedef enum {
 typedef struct {
     ZfHomeStatus status;
     ZfTransportMode transport_mode;
+    bool show_list; /* tpm branch: passkey list (Down) instead of the U2F-like screen */
     size_t item_count;
     size_t selected_item;
     size_t visible_start;
@@ -247,6 +249,35 @@ static void zf_status_draw_callback(Canvas *canvas, void *model) {
     canvas_clear(canvas);
     canvas_set_color(canvas, ColorBlack);
     canvas_set_font(canvas, FontSecondary);
+    /*
+     * tpm branch (2026-11-05): the default home screen looks like the Flipper
+     * U2F app (owner: "connect the cable and press OK"). The passkey list is
+     * one press of Down away; Right opens the menu.
+     */
+    if (!status->show_list) {
+        const Icon *icon = &I_Connect_me_62x31;
+        const char *text = "Connect to a device";
+
+        if (status->transport_mode == ZfTransportModeNfc) {
+            icon = &I_Connected_62x31;
+            text = "Hold near the phone";
+        } else if (status->status == ZfHomeStatusConnected) {
+            icon = &I_Connected_62x31;
+            text = "Connected!";
+        } else if (status->status == ZfHomeStatusWaiting) {
+            icon = &I_Connected_62x31;
+            text = "Working...";
+        }
+        if (status->status == ZfHomeStatusError) {
+            icon = &I_Error_62x31;
+            text = "Error, see Menu";
+        }
+        canvas_draw_icon(canvas, 8, 14, &I_Drive_112x35);
+        canvas_draw_icon(canvas, 22, 15, icon);
+        canvas_draw_str_aligned(canvas, 128 / 2, 3, AlignCenter, AlignTop, text);
+        elements_button_right(canvas, "Menu");
+        return;
+    }
     canvas_draw_str(canvas, 4, 10, "ZeroFIDO");
     canvas_draw_str(canvas, 5, 10, "ZeroFIDO");
     canvas_draw_str(canvas, 48, 10, transport_title);
@@ -288,8 +319,28 @@ static void zf_status_draw_callback(Canvas *canvas, void *model) {
             elements_scrollbar_pos(canvas, 127, 15, 37, status->selected_item, status->item_count);
         }
     }
-    elements_button_left(canvas, "Exit");
+    elements_button_left(canvas, "Back");
     elements_button_right(canvas, "Settings");
+}
+
+/* tpm branch: list mode of the home screen (see zf_status_draw_callback). */
+bool zerofido_ui_status_list_mode(ZerofidoApp *app) {
+    bool show_list = false;
+
+    if (!app || !app->status_view) {
+        return false;
+    }
+    with_view_model(app->status_view, ZfStatusModel * model, { show_list = model->show_list; },
+                    false);
+    return show_list;
+}
+
+void zerofido_ui_status_set_list_mode(ZerofidoApp *app, bool show_list) {
+    if (!app || !app->status_view) {
+        return;
+    }
+    with_view_model(app->status_view, ZfStatusModel * model, { model->show_list = show_list; },
+                    true);
 }
 
 void zerofido_ui_status_bind_view(ZerofidoApp *app) {

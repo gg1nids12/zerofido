@@ -1339,6 +1339,12 @@ static bool zerofido_status_input_callback(InputEvent *event, void *context) {
 
     if (event->type == InputTypeShort || event->type == InputTypeRepeat) {
         if (event->key == InputKeyUp || event->key == InputKeyDown) {
+            /* tpm branch: the first Up/Down opens the passkey list. */
+            if (!zerofido_ui_status_list_mode(app)) {
+                zerofido_ui_status_set_list_mode(app, true);
+                zerofido_ui_refresh_credentials_status(app);
+                return true;
+            }
             if (zerofido_home_select_relative(app, event->key == InputKeyUp ? -1 : 1)) {
                 zerofido_ui_refresh_credentials_status(app);
             }
@@ -1351,6 +1357,10 @@ static bool zerofido_status_input_callback(InputEvent *event, void *context) {
     }
 
     if (event->key == InputKeyLeft) {
+        if (zerofido_ui_status_list_mode(app)) {
+            zerofido_ui_status_set_list_mode(app, false);
+            return true;
+        }
         return zerofido_navigation_callback(app);
     }
 
@@ -1366,7 +1376,8 @@ static bool zerofido_status_input_callback(InputEvent *event, void *context) {
     }
 
     if (event->key == InputKeyOk) {
-        if (zerofido_home_selected_credential(app, &selected_index)) {
+        if (zerofido_ui_status_list_mode(app) &&
+            zerofido_home_selected_credential(app, &selected_index)) {
             zerofido_open_credential_detail(app, selected_index);
         }
         return true;
@@ -1689,7 +1700,7 @@ static void zerofido_ui_free_rare_view(ZerofidoApp *app, ZfViewId view_id) {
     switch (view_id) {
     case ZfViewApproval:
         if (app->approval_view) {
-            dialog_ex_free(app->approval_view);
+            view_free(app->approval_view);
             app->approval_view = NULL;
         }
         break;
@@ -1787,13 +1798,13 @@ bool zerofido_ui_ensure_view(ZerofidoApp *app, ZfViewId view_id) {
 
     case ZfViewApproval:
         if (!app->approval_view) {
-            app->approval_view = dialog_ex_alloc();
+            app->approval_view = view_alloc();
             if (!app->approval_view) {
                 return false;
             }
+            zerofido_ui_approval_bind_view(app);
         }
-        return zerofido_ui_register_view(app, ZfViewApproval,
-                                         dialog_ex_get_view(app->approval_view));
+        return zerofido_ui_register_view(app, ZfViewApproval, app->approval_view);
 
     case ZfViewCredentials:
         if (!app->credentials_menu) {
@@ -1948,7 +1959,7 @@ void zerofido_ui_deinit(ZerofidoApp *app) {
     }
 
     if (app->approval_view) {
-        dialog_ex_free(app->approval_view);
+        view_free(app->approval_view);
         app->approval_view = NULL;
     }
     if (app->pin_confirm_view) {

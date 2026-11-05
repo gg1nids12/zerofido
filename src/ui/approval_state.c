@@ -17,6 +17,9 @@
 
 #include "../zerofido_ui.h"
 
+#include <assets_icons.h>
+#include <gui/elements.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "../transport/adapter.h"
@@ -40,22 +43,82 @@ static bool zerofido_ui_finish_interaction_locked(ZerofidoApp *app, ZfApprovalSt
     return true;
 }
 
-static void zerofido_dialog_result_callback(DialogExResult result, void *context) {
-    ZerofidoApp *app = context;
+/*
+ * tpm branch (2026-11-05): U2F-like approval screen (owner: "connect the cable
+ * and press OK"). OK approves; Left or Back denies.
+ */
+typedef struct {
+    char action[24];
+    char site[72];
+} ZfApprovalModel;
+
+static void zerofido_approval_finish(ZerofidoApp *app, bool approved) {
     bool finished = false;
-    furi_assert(app);
 
     furi_mutex_acquire(app->ui_mutex, FuriWaitForever);
-    finished = zerofido_ui_finish_interaction_locked(
-        /* tpm branch: OK (center) approves, as the owner asked; Right still works. */
-        app, (result == DialogExResultCenter || result == DialogExResultRight) ? ZfApprovalApproved
-                                                                               : ZfApprovalDenied);
+    finished = zerofido_ui_finish_interaction_locked(app, approved ? ZfApprovalApproved
+                                                                   : ZfApprovalDenied);
     furi_mutex_release(app->ui_mutex);
     if (finished) {
         zf_transport_notify_interaction_changed(app);
     }
 
     zerofido_ui_dispatch_custom_event(app, ZfEventHideApproval);
+}
+
+static void zerofido_approval_draw(Canvas *canvas, void *model) {
+    ZfApprovalModel *approval = model;
+    char line[100];
+    size_t len = 0;
+
+    canvas_clear(canvas);
+    canvas_set_color(canvas, ColorBlack);
+    canvas_set_font(canvas, FontSecondary);
+    canvas_draw_icon(canvas, 8, 14, &I_Drive_112x35);
+    canvas_draw_icon(canvas, 22, 15, &I_Auth_62x31);
+    snprintf(line, sizeof(line), "%s: %s", approval->action, approval->site);
+    len = strlen(line);
+    while (len > 4 && canvas_string_width(canvas, line) > 124) {
+        len--;
+        line[len - 2] = '.';
+        line[len - 1] = '.';
+        line[len] = '\0';
+    }
+    canvas_draw_str_aligned(canvas, 128 / 2, 3, AlignCenter, AlignTop, line);
+    elements_button_center(canvas, "OK");
+}
+
+static bool zerofido_approval_input(InputEvent *event, void *context) {
+    ZerofidoApp *app = context;
+
+    if (event->type != InputTypeShort) {
+        return false;
+    }
+    if (event->key == InputKeyOk || event->key == InputKeyLeft) {
+        zerofido_approval_finish(app, event->key == InputKeyOk);
+        return true;
+    }
+    return false; /* Back goes to navigation, which denies a pending request */
+}
+
+void zerofido_ui_approval_bind_view(ZerofidoApp *app) {
+    view_allocate_model(app->approval_view, ViewModelTypeLocking, sizeof(ZfApprovalModel));
+    view_set_context(app->approval_view, app);
+    view_set_draw_callback(app->approval_view, zerofido_approval_draw);
+    view_set_input_callback(app->approval_view, zerofido_approval_input);
+}
+
+static const char *zerofido_approval_action(const char *operation) {
+    if (!operation) {
+        return "Confirm";
+    }
+    if (strstr(operation, "Create") || strstr(operation, "Register")) {
+        return "Register";
+    }
+    if (strstr(operation, "Use") || strstr(operation, "Authenticate")) {
+        return "Sign in";
+    }
+    return operation;
 }
 
 static void zerofido_ui_prepare_interaction_locked(ZerofidoApp *app, ZfInteractionKind kind,
@@ -212,15 +275,18 @@ void zerofido_ui_show_interaction(ZerofidoApp *app) {
         if (!zerofido_ui_ensure_view(app, ZfViewApproval)) {
             return;
         }
-        dialog_ex_reset(app->approval_view);
-        dialog_ex_set_context(app->approval_view, app);
-        dialog_ex_set_result_callback(app->approval_view, zerofido_dialog_result_callback);
-        dialog_ex_set_header(app->approval_view, app->approval.details.approval.operation, 64, 0,
-                             AlignCenter, AlignTop);
-        dialog_ex_set_text(app->approval_view, body, 64, 28, AlignCenter, AlignCenter);
-        dialog_ex_set_left_button_text(app->approval_view, "Deny");
-        dialog_ex_set_center_button_text(app->approval_view, "OK");
-        dialog_ex_set_right_button_text(app->approval_view, NULL);
+        furi_mutex_acquire(app->ui_mutex, FuriWaitForever);
+        with_view_model(
+            app->approval_view, ZfApprovalModel * model,
+            {
+                snprintf(model->action, sizeof(model->action), "%.23s",
+                         zerofido_approval_action(app->approval.details.approval.operation));
+                snprintf(model->site, sizeof(model->site), "%.71s",
+                         app->approval.target_id[0] ? app->approval.target_id : "(unknown)");
+            },
+            true);
+        furi_mutex_release(app->ui_mutex);
+        UNUSED(body);
     }
 
     zerofido_notify_prompt(app);
@@ -246,9 +312,7 @@ void zerofido_ui_hide_interaction(ZerofidoApp *app) {
         return;
     }
 
-    if (kind == ZfInteractionKindApproval && app->approval_view) {
-        dialog_ex_reset(app->approval_view);
-    }
+    UNUSED(kind);
     zerofido_ui_switch_to_view(app, ZfViewStatus);
     if (approval_state == ZfApprovalTimedOut) {
         zerofido_ui_set_status(app, "Request timed out");

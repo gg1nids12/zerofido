@@ -25,3 +25,6 @@
 void zerofido_ui_status_bind_view(ZerofidoApp *app);
 void zerofido_ui_status_redraw(ZerofidoApp *app);
 void zerofido_ui_apply_transport_connected(ZerofidoApp *app, bool connected);
+/* tpm branch: home screen list mode (passkey list instead of the U2F-like screen). */
+bool zerofido_ui_status_list_mode(ZerofidoApp *app);
+void zerofido_ui_status_set_list_mode(ZerofidoApp *app, bool show_list);
