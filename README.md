@@ -1,3 +1,15 @@
+> [!WARNING]
+> **Work in progress — a development fork of [ZeroFIDO](https://github.com/MinorGlitch/zerofido)
+> by Alex Stoyanov (MinorGlitch).** This `tpm` branch reworks ZeroFIDO toward TPM-like key
+> protection on Flipper Zero: credential keys bound to the PIN, no stored PIN verifier, and a slow,
+> device-bound PIN check. It is not ready. Do not use it for real accounts.
+> Plan: [docs/TPM_HARDENING.md](docs/TPM_HARDENING.md). Changes against upstream:
+> [CHANGES-TPM.md](CHANGES-TPM.md). License (GPL-3.0-or-later) and authorship are preserved.
+>
+> **В разработке — доработка ZeroFIDO.** Ветка `tpm` переделывает защиту ключей ближе к уровню
+> TPM: ключи под PIN, без хранения отпечатка PIN, медленная проверка PIN только на этом Флиппере.
+> Не готово, не использовать для настоящих аккаунтов.
+
 ![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 ![Platform: Flipper Zero](https://img.shields.io/badge/platform-Flipper%20Zero-orange)
 ![Protocols: FIDO2 + U2F](https://img.shields.io/badge/protocols-FIDO2%20%2B%20U2F-green)
