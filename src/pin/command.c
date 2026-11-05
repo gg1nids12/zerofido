@@ -21,6 +21,7 @@
 #include "../zerofido_usb_diagnostics.h"
 #include "client_pin/internal.h"
 #include "vault.h"
+#include "../zerofido_trace.h"
 #include "../transport/adapter.h"
 
 static ZfClientPinCommandScratch *zf_pin_command_scratch(ZerofidoApp *app) {
@@ -241,6 +242,10 @@ uint8_t zerofido_pin_handle_command_with_session(ZerofidoApp *app, ZfTransportSe
     }
 cleanup:
     zf_vault_set_progress(NULL, NULL);
+    ZF_TRACE(app->storage, "CP sub=%u st=%02X pin=%d vault=%d/%d",
+             parsed ? (unsigned)parsed->subcommand : 0U, status,
+             app->pin_state.pin_set ? 1 : 0, zf_vault_is_present() ? 1 : 0,
+             zf_vault_is_unlocked() ? 1 : 0);
 #if ZF_RELEASE_DIAGNOSTICS
     zf_pin_log_result(diagnostic_tag, status);
 #endif

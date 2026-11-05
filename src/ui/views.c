@@ -943,7 +943,7 @@ static void zerofido_pin_input_result_callback(void *context) {
     case ZfPinInputChangeCurrent:
         strncpy(pin_buffers->current, pin_buffers->input, sizeof(pin_buffers->current) - 1);
         pin_buffers->current[sizeof(pin_buffers->current) - 1] = '\0';
-        zerofido_open_pin_input(app, ZfPinInputChangeNew, "New PIN, 10+ chars", ZF_MIN_PIN_LENGTH);
+        zerofido_open_pin_input(app, ZfPinInputChangeNew, "Enter new PIN", ZF_MIN_PIN_LENGTH);
         return;
     case ZfPinInputChangeNew:
         strncpy(pin_buffers->new_pin, pin_buffers->input, sizeof(pin_buffers->new_pin) - 1);
@@ -1111,7 +1111,7 @@ static void zerofido_pin_menu_callback(void *context, uint32_t index) {
     switch (index) {
     case ZfPinMenuItemSet:
         zerofido_pin_reset_buffers(app);
-        zerofido_open_pin_input(app, ZfPinInputSetNew, "New PIN, 10+ chars", ZF_MIN_PIN_LENGTH);
+        zerofido_open_pin_input(app, ZfPinInputSetNew, "Enter new PIN", ZF_MIN_PIN_LENGTH);
         break;
     case ZfPinMenuItemChange:
         zerofido_pin_reset_buffers(app);

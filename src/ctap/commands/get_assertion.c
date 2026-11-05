@@ -16,6 +16,8 @@
  */
 
 #include "get_assertion.h"
+#include "../../zerofido_trace.h"
+#include "../../pin/vault.h"
 
 #include <furi.h>
 #include <string.h>
@@ -412,6 +414,9 @@ cleanup:
     if (status != ZF_CTAP_SUCCESS) {
         FURI_LOG_I("ZeroFIDO:CTAP", "GA error=%02X", status);
     }
+#else
+    ZF_TRACE(app->storage, "GA st=%02X vault=%d/%d", status, zf_vault_is_present() ? 1 : 0,
+             zf_vault_is_unlocked() ? 1 : 0);
 #endif
     if (maintenance_acquired) {
         zf_ctap_end_maintenance(app);

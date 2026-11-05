@@ -34,14 +34,14 @@
 #include "../../zerofido_store.h"
 #include "../../pin/vault.h"
 #include "../../store/binding.h"
+#include "../../zerofido_trace.h"
 
 #if defined(ZF_RELEASE_DIAGNOSTICS) && ZF_RELEASE_DIAGNOSTICS
 #define ZF_CTAP_MC_DIAG(text) FURI_LOG_I("ZeroFIDO:CTAP", "MC %s", (text))
 #else
-#define ZF_CTAP_MC_DIAG(text)                                                                      \
-    do {                                                                                           \
-        (void)(text);                                                                              \
-    } while (false)
+/* tpm branch: remember the last stage for the troubleshooting trace. */
+static const char *zf_mc_trace_stage = "";
+#define ZF_CTAP_MC_DIAG(text) (zf_mc_trace_stage = (text))
 #endif
 
 /*
@@ -317,6 +317,11 @@ cleanup:
     if (status != ZF_CTAP_SUCCESS) {
         FURI_LOG_I("ZeroFIDO:CTAP", "MC error=%02X", status);
     }
+#else
+    ZF_TRACE(app->storage, "MC st=%02X at=%s rk=%d pa=%d uv=%d vault=%d/%d", status,
+             zf_mc_trace_stage, resident_key ? 1 : 0, scratch->request.has_pin_auth ? 1 : 0,
+             uv_verified ? 1 : 0, zf_vault_is_present() ? 1 : 0, zf_vault_is_unlocked() ? 1 : 0);
+    zf_mc_trace_stage = "";
 #endif
     if (maintenance_acquired) {
         zf_ctap_end_maintenance(app);

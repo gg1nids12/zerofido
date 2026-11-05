@@ -47,7 +47,9 @@ static void zerofido_dialog_result_callback(DialogExResult result, void *context
 
     furi_mutex_acquire(app->ui_mutex, FuriWaitForever);
     finished = zerofido_ui_finish_interaction_locked(
-        app, result == DialogExResultRight ? ZfApprovalApproved : ZfApprovalDenied);
+        /* tpm branch: OK (center) approves, as the owner asked; Right still works. */
+        app, (result == DialogExResultCenter || result == DialogExResultRight) ? ZfApprovalApproved
+                                                                               : ZfApprovalDenied);
     furi_mutex_release(app->ui_mutex);
     if (finished) {
         zf_transport_notify_interaction_changed(app);
@@ -217,8 +219,8 @@ void zerofido_ui_show_interaction(ZerofidoApp *app) {
                              AlignCenter, AlignTop);
         dialog_ex_set_text(app->approval_view, body, 64, 28, AlignCenter, AlignCenter);
         dialog_ex_set_left_button_text(app->approval_view, "Deny");
-        dialog_ex_set_center_button_text(app->approval_view, NULL);
-        dialog_ex_set_right_button_text(app->approval_view, "Approve");
+        dialog_ex_set_center_button_text(app->approval_view, "OK");
+        dialog_ex_set_right_button_text(app->approval_view, NULL);
     }
 
     zerofido_notify_prompt(app);

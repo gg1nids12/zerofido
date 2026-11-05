@@ -104,15 +104,12 @@
 #define ZF_PIN_ENCRYPTED_NEW_PIN_MAX_LEN (ZF_PIN_NEW_PIN_BLOCK_MAX_LEN + ZF_PIN_PROTOCOL2_IV_LEN)
 #define ZF_PIN_RETRIES_MAX 8
 /*
- * tpm branch (2026-11-05): the PIN is optional, but when set it is the only
- * barrier for a stolen device (one guess per ~1 s on that device), so require
- * at least 10 characters. Host tests keep the CTAP minimum of 4.
+ * tpm branch (2026-11-05): CTAP minimum of 4. A 10-character minimum broke
+ * Windows: a CTAP 2.0 key cannot report its minimum, so Windows showed
+ * "reinsert your key" in a loop on PIN_POLICY_VIOLATION. Longer PINs are
+ * still recommended — each guess costs ~1 s on this device only.
  */
-#ifdef ZF_HOST_TEST
 #define ZF_MIN_PIN_LENGTH 4
-#else
-#define ZF_MIN_PIN_LENGTH 10
-#endif
 #define ZF_PIN_TOKEN_TIMEOUT_MS 30000
 #define ZF_COUNTER_RESERVATION_WINDOW 32U
 
