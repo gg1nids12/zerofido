@@ -25,6 +25,7 @@
 #include "ctap/response.h"
 #include "store/internal.h"
 #include "pin/store/internal.h"
+#include "pin/vault.h"
 #include "store/record_format_internal.h"
 
 /*
@@ -232,6 +233,8 @@ static uint8_t *test_storage_select_data(const char *path, size_t **size_out, bo
 }
 
 static void test_storage_reset(void) {
+    /* tpm branch: the PIN vault is process-wide state. */
+    zf_vault_reset_runtime();
     g_fail_crypto_encrypt = false;
     g_fail_crypto_decrypt = false;
     g_fail_crypto_decrypt_after = SIZE_MAX;
@@ -1354,6 +1357,7 @@ bool zf_u2f_adapter_is_available(const ZerofidoApp *app) {
 #include "../../../src/pin/core/retry.c"
 #include "../../../src/pin/core/plaintext.c"
 #include "../../../src/pin/core/lifecycle.c"
+#include "../../../src/pin/core/vault.c"
 #include "../../../src/pin/client_pin/parse.c"
 #include "../../../src/pin/client_pin/response.c"
 #include "../../../src/pin/client_pin/operations.c"
@@ -1428,6 +1432,14 @@ static bool test_zf_record_decode(const uint8_t *data, size_t data_size, const c
                             &has_embedded_counter_floor);
 }
 
+/* tpm branch: the stored PIN state is a vault verifier, not the PIN hash;
+ * requests must carry the real LEFT(SHA-256(PIN),16) of the test PIN. */
+static const uint8_t *test_pin_hash_1234(void) {
+    static uint8_t hash[32];
+    zf_crypto_sha256((const uint8_t *)"1234", 4, hash);
+    return hash;
+}
+
 #include "subsystems/app/tests.inc"
 #include "subsystems/store/record_format_tests.inc"
 #include "subsystems/cbor/tests.inc"
@@ -1437,6 +1449,7 @@ static bool test_zf_record_decode(const uint8_t *data, size_t data_size, const c
 #include "subsystems/pin/client_pin_tests.inc"
 #include "subsystems/ctap/command_tests.inc"
 #include "subsystems/store/atomic_counter_tests.inc"
+#include "subsystems/pin/vault_tests.inc"
 
 int main(void) {
     test_command_scratch_is_allocated_lifetime_and_single_owner();
@@ -1668,6 +1681,7 @@ int main(void) {
     test_store_update_record_reserves_counter_floor_before_counter_advance();
     test_store_file_write_and_load_fail_closed_without_counter_floor_crypto();
     test_store_counter_reservation_failure_does_not_publish_counter();
+    run_vault_tests();
     puts("native protocol regressions passed");
     return 0;
 }

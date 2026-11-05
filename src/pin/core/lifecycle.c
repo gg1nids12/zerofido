@@ -23,6 +23,7 @@
 #include "../../zerofido_app_i.h"
 #include "../internal.h"
 #include "../store/state_store.h"
+#include "../vault.h"
 
 static bool zf_pin_refresh_runtime_secrets(uint8_t pin_token[ZF_PIN_TOKEN_LEN],
                                            ZfP256KeyAgreementKey *key_agreement) {
@@ -43,6 +44,19 @@ ZfPinInitResult zerofido_pin_init_with_result(Storage *storage, ZfClientPinState
     if (load_status == ZfPinLoadInvalid) {
         zf_crypto_secure_zero(state->pin_hash, sizeof(state->pin_hash));
         return ZfPinInitInvalidPersistedState;
+    }
+    /*
+     * tpm branch: the vault is authoritative for the PIN. A vault without a set
+     * PIN is left over from an interrupted setPin or clear and is removed.
+     */
+    if (!zf_vault_load(storage)) {
+        zf_crypto_secure_zero(state->pin_hash, sizeof(state->pin_hash));
+        return ZfPinInitInvalidPersistedState;
+    }
+    if (load_status == ZfPinLoadOk && zf_vault_is_present()) {
+        zf_vault_get_verifier(state->pin_hash);
+    } else if (load_status != ZfPinLoadOk && zf_vault_is_present()) {
+        zf_vault_destroy(storage);
     }
     if (load_status == ZfPinLoadOk) {
         state->pin_set = true;
@@ -87,6 +101,8 @@ bool zerofido_pin_clear(Storage *storage, ZfClientPinState *state) {
         zf_crypto_secure_zero(&next_key_agreement, sizeof(next_key_agreement));
         return false;
     }
+    /* tpm branch: bound passkeys must be unbound by the caller before this. */
+    zf_vault_destroy(storage);
 
     zf_crypto_secure_zero(state->pin_hash, sizeof(state->pin_hash));
     state->pin_set = false;

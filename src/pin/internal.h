@@ -81,3 +81,6 @@ uint8_t zf_pin_auth_failure(Storage *storage, ZfClientPinState *state);
 uint8_t zf_pin_auth_success(Storage *storage, ZfClientPinState *state);
 uint8_t zf_pin_verify_hash(Storage *storage, ZfClientPinState *state,
                            const uint8_t pin_hash[ZF_PIN_HASH_LEN]);
+/* tpm branch: slow, device-bound PIN check through the vault (vault.h). */
+bool zf_pin_check_hash(Storage *storage, ZfClientPinState *state,
+                       const uint8_t pin_hash[ZF_PIN_HASH_LEN]);

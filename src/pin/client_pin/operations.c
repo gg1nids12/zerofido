@@ -105,6 +105,14 @@ static uint8_t zf_client_pin_request_permission_token_consent(
     bool held_maintenance = false;
     uint8_t status = ZF_CTAP_SUCCESS;
     const char *target_id = request->has_rp_id ? request->rp_id : "PIN token";
+    /*
+     * tpm branch: state->pin_hash is the vault verifier after the PIN check.
+     * Remember it to detect a PIN change or removal during the consent wait.
+     */
+    uint8_t verifier_before[ZF_PIN_HASH_LEN];
+
+    UNUSED(pin_hash_plain);
+    memcpy(verifier_before, state->pin_hash, sizeof(verifier_before));
 
     furi_mutex_acquire(app->ui_mutex, FuriWaitForever);
     app->pin_state = *state;
@@ -126,6 +134,7 @@ static uint8_t zf_client_pin_request_permission_token_consent(
     if (held_maintenance) {
         if (app->maintenance_busy) {
             furi_mutex_release(app->ui_mutex);
+            zf_crypto_secure_zero(verifier_before, sizeof(verifier_before));
             return status == ZF_CTAP_SUCCESS ? ZF_CTAP_ERR_NOT_ALLOWED : status;
         }
         app->maintenance_busy = true;
@@ -134,12 +143,15 @@ static uint8_t zf_client_pin_request_permission_token_consent(
     furi_mutex_release(app->ui_mutex);
 
     if (status != ZF_CTAP_SUCCESS) {
+        zf_crypto_secure_zero(verifier_before, sizeof(verifier_before));
         return status;
     }
     if (!state->pin_set ||
-        !zf_crypto_constant_time_equal(pin_hash_plain, state->pin_hash, ZF_PIN_HASH_LEN)) {
+        !zf_crypto_constant_time_equal(verifier_before, state->pin_hash, ZF_PIN_HASH_LEN)) {
+        zf_crypto_secure_zero(verifier_before, sizeof(verifier_before));
         return ZF_CTAP_ERR_PIN_AUTH_INVALID;
     }
+    zf_crypto_secure_zero(verifier_before, sizeof(verifier_before));
 
     return ZF_CTAP_SUCCESS;
 }
@@ -390,7 +402,7 @@ uint8_t zf_client_pin_handle_get_pin_token(
         goto cleanup;
     }
     ZF_PIN_OP_DIAG("cmd=%s compare", permissions_mode ? "CP-PT" : "CP-TK");
-    if (!zf_crypto_constant_time_equal(pin_hash_plain, state->pin_hash, ZF_PIN_HASH_LEN)) {
+    if (!zf_pin_check_hash(storage, state, pin_hash_plain)) {
         zf_client_pin_diag_secret_block("cmd=CP pin hash got", pin_hash_plain, ZF_PIN_HASH_LEN);
         zf_client_pin_diag_secret_block("cmd=CP pin hash stored", state->pin_hash, ZF_PIN_HASH_LEN);
         status = zf_pin_auth_failure(storage, state);

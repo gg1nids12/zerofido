@@ -22,6 +22,7 @@
 #include "../../zerofido_app_i.h"
 #include "../internal.h"
 #include "../store/state_store.h"
+#include "../vault.h"
 
 bool zf_pin_persist_state(Storage *storage, const ZfClientPinState *state) {
     return zf_pin_state_store_persist(storage, state);
@@ -136,11 +137,37 @@ uint8_t zf_pin_verify_hash(Storage *storage, ZfClientPinState *state,
     if (state->pin_retries == 0) {
         return ZF_CTAP_ERR_PIN_BLOCKED;
     }
-    if (!zf_crypto_constant_time_equal(pin_hash, state->pin_hash, ZF_PIN_HASH_LEN)) {
+    if (!zf_pin_check_hash(storage, state, pin_hash)) {
         return zf_pin_auth_failure(storage, state);
     }
 
     return zf_pin_auth_success(storage, state);
+}
+
+/*
+ * tpm branch (2026-11-05): the PIN is checked by opening the vault, which costs
+ * a device-bound stretch per attempt. state->pin_hash only mirrors the vault
+ * verifier for the PIN file seal. A PIN set by an older version (no vault)
+ * is compared once against the stored hash and then migrated to a vault.
+ */
+bool zf_pin_check_hash(Storage *storage, ZfClientPinState *state,
+                       const uint8_t pin_hash[ZF_PIN_HASH_LEN]) {
+    uint8_t verifier[ZF_VAULT_VERIFIER_LEN];
+    bool ok = false;
+
+    if (zf_vault_is_present()) {
+        ok = zf_vault_unlock(pin_hash);
+        if (ok && zf_vault_get_verifier(verifier)) {
+            memcpy(state->pin_hash, verifier, ZF_PIN_HASH_LEN);
+        }
+    } else {
+        ok = zf_crypto_constant_time_equal(pin_hash, state->pin_hash, ZF_PIN_HASH_LEN);
+        if (ok && zf_vault_create(storage, pin_hash, verifier)) {
+            memcpy(state->pin_hash, verifier, ZF_PIN_HASH_LEN);
+        }
+    }
+    zf_crypto_secure_zero(verifier, sizeof(verifier));
+    return ok;
 }
 
 bool zerofido_pin_resume_auth_attempts(Storage *storage, ZfClientPinState *state) {

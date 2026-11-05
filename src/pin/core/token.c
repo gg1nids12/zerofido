@@ -23,6 +23,7 @@
 #include "../../zerofido_app_i.h"
 #include "../../zerofido_usb_diagnostics.h"
 #include "../internal.h"
+#include "../vault.h"
 
 #if ZF_USB_DIAGNOSTICS
 static void zf_pin_usb_diag_hex(Storage *storage, const char *label, const uint8_t *data,
@@ -75,6 +76,8 @@ void zf_pin_reset_token_metadata(ZfClientPinState *state) {
 }
 
 void zf_pin_invalidate_token_state(ZfClientPinState *state) {
+    /* tpm branch: the PMK never outlives the PIN token. */
+    zf_vault_lock();
     zf_crypto_secure_zero(state->pin_token, sizeof(state->pin_token));
     zf_pin_reset_token_metadata(state);
 }
@@ -158,6 +161,7 @@ uint8_t zerofido_pin_require_auth(Storage *storage, ZfClientPinState *state, boo
     uint8_t expected[32];
 
     *uv_verified = false;
+    zf_vault_tick();
 #if ZF_USB_DIAGNOSTICS
     zf_usb_diag_logf(storage, "pin auth start uv=%u hpa=%u hpp=%u proto=%u len=%u",
                      uv_requested ? 1U : 0U, has_pin_auth ? 1U : 0U,

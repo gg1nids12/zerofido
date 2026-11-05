@@ -422,7 +422,7 @@ static void test_change_pin_invalid_new_pin_after_correct_current_pin_resets_ret
     expect(
         zerofido_pin_handle_command(
             &app, request,
-            encode_client_pin_change_pin_request(request, sizeof(request), app.pin_state.pin_hash,
+            encode_client_pin_change_pin_request(request, sizeof(request), test_pin_hash_1234(),
                                                  new_pin_block, sizeof(new_pin_block)),
             response, sizeof(response), &response_len) == ZF_CTAP_ERR_PIN_POLICY_VIOLATION,
         "invalid new PIN block should be rejected");
@@ -455,7 +455,7 @@ static void test_change_pin_preserves_key_agreement_on_success(void) {
     expect(
         zerofido_pin_handle_command(
             &app, request,
-            encode_client_pin_change_pin_request(request, sizeof(request), app.pin_state.pin_hash,
+            encode_client_pin_change_pin_request(request, sizeof(request), test_pin_hash_1234(),
                                                  new_pin_block, sizeof(new_pin_block)),
             response, sizeof(response), &response_len) == ZF_CTAP_SUCCESS,
         "changePin should succeed before checking keyAgreement continuity");

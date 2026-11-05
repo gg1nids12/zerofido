@@ -51,7 +51,7 @@ static void test_get_pin_token_success_rotates_pin_token(void) {
 
     expect(zerofido_pin_handle_command(&app, request,
                                        encode_client_pin_get_pin_token_request(
-                                           request, sizeof(request), app.pin_state.pin_hash, true),
+                                           request, sizeof(request), test_pin_hash_1234(), true),
                                        response, sizeof(response),
                                        &response_len) == ZF_CTAP_SUCCESS,
            "correct PIN should return a pin token");
@@ -94,7 +94,7 @@ static void test_get_pin_token_experimental_2_1_requires_consent(void) {
 
     expect(zerofido_pin_handle_command(&app, request,
                                        encode_client_pin_get_pin_token_request(
-                                           request, sizeof(request), app.pin_state.pin_hash, true),
+                                           request, sizeof(request), test_pin_hash_1234(), true),
                                        response, sizeof(response),
                                        &response_len) == ZF_CTAP_SUCCESS,
            "experimental CTAP 2.1 getPinToken should return a pin token after consent");
@@ -126,7 +126,7 @@ static void test_get_pin_token_protocol2_returns_iv_prefixed_token(void) {
            "init PIN state for protocol 2 getPinToken");
     expect(zerofido_pin_set_plaintext(&storage, &app.pin_state, "1234") == ZF_CTAP_SUCCESS,
            "set PIN for protocol 2 getPinToken");
-    memcpy(pin_hash_enc + ZF_PIN_PROTOCOL2_IV_LEN, app.pin_state.pin_hash, ZF_PIN_HASH_LEN);
+    memcpy(pin_hash_enc + ZF_PIN_PROTOCOL2_IV_LEN, test_pin_hash_1234(), ZF_PIN_HASH_LEN);
     app.storage = &storage;
     test_enable_fido2_1_experimental(&app);
 
@@ -160,7 +160,7 @@ static void test_client_pin_protocol2_requires_experimental_profile(void) {
            "init PIN state for default-profile protocol 2 rejection");
     expect(zerofido_pin_set_plaintext(&storage, &app.pin_state, "1234") == ZF_CTAP_SUCCESS,
            "set PIN for default-profile protocol 2 rejection");
-    memcpy(pin_hash_enc + ZF_PIN_PROTOCOL2_IV_LEN, app.pin_state.pin_hash, ZF_PIN_HASH_LEN);
+    memcpy(pin_hash_enc + ZF_PIN_PROTOCOL2_IV_LEN, test_pin_hash_1234(), ZF_PIN_HASH_LEN);
     app.storage = &storage;
 
     expect(zerofido_pin_handle_command(&app, request,
@@ -195,7 +195,7 @@ static void test_get_pin_token_decrypt_failure_consumes_retry(void) {
 
     expect(zerofido_pin_handle_command(&app, request,
                                        encode_client_pin_get_pin_token_request(
-                                           request, sizeof(request), app.pin_state.pin_hash, true),
+                                           request, sizeof(request), test_pin_hash_1234(), true),
                                        response, sizeof(response),
                                        &response_len) == ZF_CTAP_ERR_PIN_INVALID,
            "pinHash decrypt failure should consume a retry");
@@ -221,7 +221,7 @@ static void test_get_pin_token_rejects_permissions_fields(void) {
 
     expect(zerofido_pin_handle_command(&app, request,
                                        encode_client_pin_request_with_permissions(
-                                           request, sizeof(request), 0x05, app.pin_state.pin_hash,
+                                           request, sizeof(request), 0x05, test_pin_hash_1234(),
                                            true, ZF_PIN_PERMISSION_MC, NULL),
                                        response, sizeof(response),
                                        &response_len) == ZF_CTAP_ERR_INVALID_PARAMETER,
@@ -229,7 +229,7 @@ static void test_get_pin_token_rejects_permissions_fields(void) {
     expect(zerofido_pin_handle_command(
                &app, request,
                encode_client_pin_request_with_permissions(
-                   request, sizeof(request), 0x05, app.pin_state.pin_hash, false, 0, "example.com"),
+                   request, sizeof(request), 0x05, test_pin_hash_1234(), false, 0, "example.com"),
                response, sizeof(response), &response_len) == ZF_CTAP_ERR_INVALID_PARAMETER,
            "legacy getPinToken should reject rpId");
 }
@@ -253,7 +253,7 @@ static void test_client_pin_permissions_subcommand_requires_permissions(void) {
     expect(zerofido_pin_handle_command(
                &app, request,
                encode_client_pin_request_with_permissions(
-                   request, sizeof(request), 0x09, app.pin_state.pin_hash, false, 0, "example.com"),
+                   request, sizeof(request), 0x09, test_pin_hash_1234(), false, 0, "example.com"),
                response, sizeof(response), &response_len) == ZF_CTAP_ERR_INVALID_SUBCOMMAND,
            "CTAP 2.0 profile should not expose the 0x09 permissions-token subcommand");
 }
@@ -276,7 +276,7 @@ static void test_client_pin_permissions_subcommand_rejects_zero_permissions(void
     expect(zerofido_pin_handle_command(
                &app, request,
                encode_client_pin_request_with_permissions(
-                   request, sizeof(request), 0x09, app.pin_state.pin_hash, true, 0, "example.com"),
+                   request, sizeof(request), 0x09, test_pin_hash_1234(), true, 0, "example.com"),
                response, sizeof(response), &response_len) == ZF_CTAP_ERR_INVALID_SUBCOMMAND,
            "CTAP 2.0 profile should not expose the 0x09 permissions-token subcommand");
 }
@@ -300,7 +300,7 @@ static void test_client_pin_permissions_subcommand_rejects_unsupported_permissio
     expect(zerofido_pin_handle_command(
                &app, request,
                encode_client_pin_request_with_permissions(
-                   request, sizeof(request), 0x09, app.pin_state.pin_hash, true, 0x04U, NULL),
+                   request, sizeof(request), 0x09, test_pin_hash_1234(), true, 0x04U, NULL),
                response, sizeof(response), &response_len) == ZF_CTAP_ERR_INVALID_SUBCOMMAND,
            "CTAP 2.0 profile should not expose the 0x09 permissions-token subcommand");
 }
@@ -322,7 +322,7 @@ static void test_client_pin_permissions_subcommand_requires_rp_id_for_mc_ga(void
 
     expect(zerofido_pin_handle_command(&app, request,
                                        encode_client_pin_request_with_permissions(
-                                           request, sizeof(request), 0x09, app.pin_state.pin_hash,
+                                           request, sizeof(request), 0x09, test_pin_hash_1234(),
                                            true, ZF_PIN_PERMISSION_MC, NULL),
                                        response, sizeof(response),
                                        &response_len) == ZF_CTAP_ERR_INVALID_SUBCOMMAND,
@@ -349,18 +349,18 @@ static void test_client_pin_permissions_subcommand_experimental_validates_parame
     expect(zerofido_pin_handle_command(
                &app, request,
                encode_client_pin_request_with_permissions(
-                   request, sizeof(request), 0x09, app.pin_state.pin_hash, false, 0, "example.com"),
+                   request, sizeof(request), 0x09, test_pin_hash_1234(), false, 0, "example.com"),
                response, sizeof(response), &response_len) == ZF_CTAP_ERR_MISSING_PARAMETER,
            "2.1 0x09 should require the permissions field");
     expect(zerofido_pin_handle_command(
                &app, request,
                encode_client_pin_request_with_permissions(
-                   request, sizeof(request), 0x09, app.pin_state.pin_hash, true, 0, "example.com"),
+                   request, sizeof(request), 0x09, test_pin_hash_1234(), true, 0, "example.com"),
                response, sizeof(response), &response_len) == ZF_CTAP_ERR_INVALID_PARAMETER,
            "2.1 0x09 should reject zero permissions");
     expect(zerofido_pin_handle_command(&app, request,
                                        encode_client_pin_request_with_permissions(
-                                           request, sizeof(request), 0x09, app.pin_state.pin_hash,
+                                           request, sizeof(request), 0x09, test_pin_hash_1234(),
                                            true, ZF_PIN_PERMISSION_MC, NULL),
                                        response, sizeof(response),
                                        &response_len) == ZF_CTAP_ERR_MISSING_PARAMETER,
@@ -368,7 +368,7 @@ static void test_client_pin_permissions_subcommand_experimental_validates_parame
     expect(zerofido_pin_handle_command(
                &app, request,
                encode_client_pin_request_with_permissions(
-                   request, sizeof(request), 0x09, app.pin_state.pin_hash, true, 0x40U, NULL),
+                   request, sizeof(request), 0x09, test_pin_hash_1234(), true, 0x40U, NULL),
                response, sizeof(response), &response_len) == ZF_CTAP_ERR_INVALID_PARAMETER,
            "2.1 0x09 should reject unknown permission bits as invalid parameters");
     expect(g_approval_request_count == 0,
@@ -397,7 +397,7 @@ static void test_client_pin_permissions_subcommand_stores_permissions_and_rp_id(
 
     expect(zerofido_pin_handle_command(&app, request,
                                        encode_client_pin_request_with_permissions(
-                                           request, sizeof(request), 0x09, app.pin_state.pin_hash,
+                                           request, sizeof(request), 0x09, test_pin_hash_1234(),
                                            true, ZF_PIN_PERMISSION_MC, "example.com"),
                                        response, sizeof(response),
                                        &response_len) == ZF_CTAP_SUCCESS,
@@ -453,7 +453,7 @@ static void test_client_pin_permissions_subcommand_issued_token_consumes_mc_afte
     expect(zerofido_pin_handle_command(
                &app, token_request,
                encode_client_pin_request_with_permissions(token_request, sizeof(token_request),
-                                                          0x09, app.pin_state.pin_hash, true,
+                                                          0x09, test_pin_hash_1234(), true,
                                                           ZF_PIN_PERMISSION_MC, "example.com"),
                token_response, sizeof(token_response), &token_response_len) == ZF_CTAP_SUCCESS,
            "2.1 0x09 should mint an mc-scoped token");
@@ -516,7 +516,7 @@ static void test_client_pin_permissions_subcommand_denied_consent_does_not_issue
 
     expect(zerofido_pin_handle_command(&app, request,
                                        encode_client_pin_request_with_permissions(
-                                           request, sizeof(request), 0x09, app.pin_state.pin_hash,
+                                           request, sizeof(request), 0x09, test_pin_hash_1234(),
                                            true, ZF_PIN_PERMISSION_MC, "example.com"),
                                        response, sizeof(response),
                                        &response_len) == ZF_CTAP_ERR_OPERATION_DENIED,
@@ -549,27 +549,27 @@ static void test_client_pin_permissions_subcommand_rejects_unsupported_be_permis
         zerofido_pin_handle_command(
             &app, request,
             encode_client_pin_request_with_permissions(
-                request, sizeof(request), 0x09, app.pin_state.pin_hash, true,
+                request, sizeof(request), 0x09, test_pin_hash_1234(), true,
                 ZF_PIN_PERMISSION_MC | ZF_PIN_PERMISSION_GA | ZF_PIN_PERMISSION_BE, "example.com"),
             response, sizeof(response), &response_len) == ZF_CTAP_ERR_UNAUTHORIZED_PERMISSION,
         "experimental CTAP 2.1 0x09 should reject unsupported bioEnrollment permission");
     expect(zerofido_pin_handle_command(&app, request,
                                        encode_client_pin_request_with_permissions(
-                                           request, sizeof(request), 0x09, app.pin_state.pin_hash,
+                                           request, sizeof(request), 0x09, test_pin_hash_1234(),
                                            true, ZF_PIN_PERMISSION_CM, NULL),
                                        response, sizeof(response),
                                        &response_len) == ZF_CTAP_ERR_UNAUTHORIZED_PERMISSION,
            "experimental CTAP 2.1 0x09 should reject unsupported credentialManagement permission");
     expect(zerofido_pin_handle_command(&app, request,
                                        encode_client_pin_request_with_permissions(
-                                           request, sizeof(request), 0x09, app.pin_state.pin_hash,
+                                           request, sizeof(request), 0x09, test_pin_hash_1234(),
                                            true, ZF_PIN_PERMISSION_LBW, NULL),
                                        response, sizeof(response),
                                        &response_len) == ZF_CTAP_ERR_UNAUTHORIZED_PERMISSION,
            "experimental CTAP 2.1 0x09 should reject unsupported largeBlobWrite permission");
     expect(zerofido_pin_handle_command(&app, request,
                                        encode_client_pin_request_with_permissions(
-                                           request, sizeof(request), 0x09, app.pin_state.pin_hash,
+                                           request, sizeof(request), 0x09, test_pin_hash_1234(),
                                            true, ZF_PIN_PERMISSION_ACFG, NULL),
                                        response, sizeof(response),
                                        &response_len) == ZF_CTAP_ERR_UNAUTHORIZED_PERMISSION,
@@ -740,7 +740,7 @@ static void test_change_pin_pin_hash_decrypt_failure_consumes_retry(void) {
     expect(
         zerofido_pin_handle_command(
             &app, request,
-            encode_client_pin_change_pin_request(request, sizeof(request), app.pin_state.pin_hash,
+            encode_client_pin_change_pin_request(request, sizeof(request), test_pin_hash_1234(),
                                                  new_pin_block, sizeof(new_pin_block)),
             response, sizeof(response), &response_len) == ZF_CTAP_ERR_PIN_INVALID,
         "pinHash decrypt failure during changePin should consume a retry");
@@ -767,12 +767,13 @@ static void test_change_pin_new_pin_decrypt_failure_returns_pin_auth_invalid(voi
            "set PIN for changePin decrypt failure");
     app.storage = &storage;
     memcpy(new_pin_block, "5678", 4);
-    g_fail_crypto_decrypt_after = 1;
+    /* tpm branch: pinHashEnc decrypt, then the vault PMK unwrap; newPinEnc fails. */
+    g_fail_crypto_decrypt_after = 2;
 
     expect(
         zerofido_pin_handle_command(
             &app, request,
-            encode_client_pin_change_pin_request(request, sizeof(request), app.pin_state.pin_hash,
+            encode_client_pin_change_pin_request(request, sizeof(request), test_pin_hash_1234(),
                                                  new_pin_block, sizeof(new_pin_block)),
             response, sizeof(response), &response_len) == ZF_CTAP_ERR_PIN_AUTH_INVALID,
         "changePin newPinEnc decrypt failure should return pin auth invalid");

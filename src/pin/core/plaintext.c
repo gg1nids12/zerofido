@@ -22,6 +22,7 @@
 #include "../../zerofido_app_i.h"
 #include "../internal.h"
 #include "../store/state_store.h"
+#include "../vault.h"
 
 static bool zf_pin_validate_utf8(const uint8_t *pin, size_t pin_len, size_t *out_count);
 
@@ -190,6 +191,27 @@ uint8_t zf_pin_apply_plaintext(Storage *storage, ZfClientPinState *state, const 
     zf_pin_refresh_pin_token(next_pin_token);
 
     zf_crypto_sha256(pin, pin_len, pin_hash);
+    /*
+     * tpm branch: the stored value is the vault verifier, not the PIN hash.
+     * setPin (or no vault yet) creates a vault with a new PMK; changePin keeps
+     * the PMK and rewraps it, which needs the vault unlocked by the PIN check
+     * that precedes every change.
+     */
+    {
+        uint8_t verifier[ZF_VAULT_VERIFIER_LEN];
+        bool vault_ok = (require_unset || !zf_vault_is_present())
+                            ? zf_vault_create(storage, pin_hash, verifier)
+                            : zf_vault_rewrap(storage, pin_hash, verifier);
+
+        if (!vault_ok) {
+            zf_crypto_secure_zero(pin_hash, sizeof(pin_hash));
+            zf_crypto_secure_zero(next_pin_token, sizeof(next_pin_token));
+            return zf_vault_is_present() && !zf_vault_is_unlocked() ? ZF_CTAP_ERR_PIN_AUTH_INVALID
+                                                                      : ZF_CTAP_ERR_OTHER;
+        }
+        memcpy(pin_hash, verifier, ZF_PIN_HASH_LEN);
+        zf_crypto_secure_zero(verifier, sizeof(verifier));
+    }
     memcpy(previous_hash, state->pin_hash, sizeof(previous_hash));
     state->pin_set = true;
     state->pin_retries = ZF_PIN_RETRIES_MAX;
