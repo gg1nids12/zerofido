@@ -92,7 +92,10 @@ if not usb_diagnostics:
 
 App(
     appid="zerofido",
-    name="ZeroFIDO",
+    # tpm branch (2026-11-05): separate USB and NFC apps share one data folder
+    # (same appid); the NFC-only app gets its own menu name. Full builds no
+    # longer fit the Momentum heap during NFC work.
+    name="ZeroFIDO NFC" if profile == "nfc" else "ZeroFIDO",
     apptype=FlipperAppType.EXTERNAL,
     entry_point="zerofido_main",
     stack_size=4 * 1024,
