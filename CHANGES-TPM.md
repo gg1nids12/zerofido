@@ -3,7 +3,7 @@
 This branch is a modified version of [ZeroFIDO](https://github.com/MinorGlitch/zerofido)
 (GPL-3.0-or-later, © Alex Stoyanov). Base: upstream commit `358ef94` (v0.8.0).
 Changes are listed newest last, with dates, as GPL-3.0 section 5(a) requires.
-Modified source files also carry a note at the top.
+New source files carry a note at the top; changes inside upstream files are marked with `tpm branch` comments.
 
 ## 2026-11-05
 
