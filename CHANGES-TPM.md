@@ -51,3 +51,18 @@ The PIN stays optional. Without a PIN everything works as upstream.
   - Upstream PIN tests now send the real PIN hash, because the stored state
     is a verifier.
 
+### Verification (2026-11-05)
+
+- Host: all upstream suites pass (Python 75, 3 skipped for missing upstream
+  docs; native crypto, protocol, transport/U2F with clang), plus the new
+  vault and binding suites.
+- Device (Flipper Zero, Momentum mntm-012, API 87.1; a test build with
+  auto-accept, driven over USB HID by python-fido2):
+  - 17/17 end-to-end checks: no-PIN register and sign-in; a short PIN is
+    rejected (0x37); a 10+ PIN is set; a wrong PIN gives 0x31 and retries go
+    8→7; a right PIN takes ~1.8–2.2 s.
+  - A PIN-bound passkey signs with a PIN and is hidden without one (0x2E).
+  - After changePin the old PIN fails and the bound passkey still signs.
+  - 5/5 after an app restart: the vault, PIN and bound passkey persist.
+  - U2F inside ZeroFIDO registers and authenticates.
+

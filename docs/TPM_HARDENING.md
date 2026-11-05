@@ -1,7 +1,10 @@
 # TPM-like hardening for ZeroFIDO (work in progress)
 
-Status: design. No application code has changed yet. Base: upstream ZeroFIDO v0.8.0
-(commit `358ef94`).
+Status: stage 1 implemented and tested on a device (see `CHANGES-TPM.md`). Still work in
+progress — not for real accounts yet. Base: upstream ZeroFIDO v0.8.0 (commit `358ef94`).
+
+The PIN is optional. Without a PIN ZeroFIDO behaves as upstream (press OK on the Flipper).
+The protection below applies when a PIN is set.
 
 ## Goal
 
