@@ -23,6 +23,7 @@
 #include "../../pin/protocol.h"
 #include "../../zerofido_cbor.h"
 #include "../../zerofido_crypto.h"
+#include "../../store/binding.h"
 
 static uint8_t zf_hmac_secret_finish(ZfHmacSecretScratch *scratch, uint8_t status) {
     zf_crypto_secure_zero(scratch, sizeof(*scratch));
@@ -152,7 +153,11 @@ uint8_t zf_ctap_hmac_secret_build_extension(const ZfClientPinState *pin_state,
         return zf_hmac_secret_finish(scratch, ZF_CTAP_ERR_INVALID_PARAMETER);
     }
 
-    cred_random = user_verified ? record->hmac_secret_with_uv : record->hmac_secret_without_uv;
+    /* tpm branch: bound records keep CredRandom under the inner layer. */
+    if (!zf_store_record_cred_random(record, user_verified, scratch->cred_random)) {
+        return zf_hmac_secret_finish(scratch, ZF_CTAP_ERR_PIN_REQUIRED);
+    }
+    cred_random = scratch->cred_random;
     if (!zf_crypto_hmac_sha256_parts_with_scratch(&scratch->hmac_scratch, cred_random,
                                                   ZF_HMAC_SECRET_LEN, scratch->salt_plain, 32U,
                                                   NULL, 0, scratch->output_plain)) {

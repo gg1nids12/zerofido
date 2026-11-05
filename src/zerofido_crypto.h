@@ -93,4 +93,15 @@ bool zf_crypto_verify_hash_with_public_key(const uint8_t public_x[ZF_PUBLIC_KEY_
                                            size_t signature_len);
 bool zf_crypto_sign_hash(const ZfCredentialRecord *record, const uint8_t hash[32], uint8_t *out,
                          size_t out_capacity, size_t *out_len);
+/*
+ * tpm branch (2026-11-05): PIN-bound credentials. inner_key is the vault
+ * record key; the private key is DUK-wrap(AES-256-CBC(inner_key, key)).
+ */
+bool zf_crypto_inner_crypt(const uint8_t inner_key[32], const uint8_t *input, uint8_t *output,
+                           size_t size, bool encrypt);
+bool zf_crypto_rewrap_private_key(ZfCredentialRecord *record, const uint8_t inner_key[32],
+                                  bool bind);
+bool zf_crypto_sign_hash_ex(const ZfCredentialRecord *record, const uint8_t *inner_key,
+                            const uint8_t hash[32], uint8_t *out, size_t out_capacity,
+                            size_t *out_len);
 bool zf_crypto_constant_time_equal(const uint8_t *left, const uint8_t *right, size_t size);

@@ -732,6 +732,14 @@ static bool parse_make_credential_none_attestation(const uint8_t *buffer, size_t
 }
 
 static void mark_pin_token_issued(ZfClientPinState *state) {
+    static Storage vault_storage;
+    uint8_t verifier[ZF_VAULT_VERIFIER_LEN];
+
     state->pin_token_active = true;
     state->pin_token_issued_at = g_fake_tick;
+    /* tpm branch: a real PIN token is issued only after the vault is unlocked. */
+    if (!zf_vault_is_unlocked()) {
+        zf_vault_reset_runtime();
+        (void)zf_vault_create(&vault_storage, test_pin_hash_1234(), verifier);
+    }
 }

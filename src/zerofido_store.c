@@ -205,6 +205,7 @@ void zf_store_index_entry_from_record(const ZfCredentialRecord *record,
     entry->counter_high_water = record->sign_count;
     entry->created_at = record->created_at;
     entry->cred_protect = zf_ctap_cred_protect_effective(record->cred_protect);
+    entry->bound = record->bound;
 }
 
 bool zf_store_init_with_buffer(Storage *storage, ZfCredentialStore *store, uint8_t *buffer,
@@ -421,6 +422,7 @@ static bool zf_store_load_record_internal_with_buffer(Storage *storage,
     out_record->sign_count = entry->sign_count;
     out_record->created_at = entry->created_at;
     out_record->cred_protect = entry->cred_protect;
+    out_record->bound = entry->bound;
     return true;
 #else
     return false;

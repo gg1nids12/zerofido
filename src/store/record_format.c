@@ -61,6 +61,7 @@ enum {
     ZfRecordKeyHmacSecretWrapped = 15,
     ZfRecordKeyHmacSecretIv = 16,
     ZfRecordKeyCounterFloor = 17,
+    ZfRecordKeyBound = 18, /* tpm branch: PIN-bound inner layer */
 };
 
 #define ZF_RECORD_HMAC_SECRET_STORAGE_LEN (ZF_HMAC_SECRET_LEN * 2U)
@@ -399,7 +400,7 @@ bool zf_store_record_format_encode(const ZfCredentialRecord *record, uint8_t *ou
         return false;
     }
 
-    size_t pairs = 15;
+    size_t pairs = record->bound ? 16 : 15;
     if (record->hmac_secret) {
         pairs += 2;
         if (!zf_record_wrap_hmac_secret(record, hmac_secret_wrapped, hmac_secret_iv)) {
@@ -439,6 +440,9 @@ bool zf_store_record_format_encode(const ZfCredentialRecord *record, uint8_t *ou
         zf_cbor_encode_uint(&enc, ZfRecordKeyCounterFloor) &&
         zf_cbor_encode_bytes(&enc, (const uint8_t *)&counter_floor, sizeof(counter_floor));
 
+    if (ok && record->bound) {
+        ok = zf_cbor_encode_uint(&enc, ZfRecordKeyBound) && zf_cbor_encode_uint(&enc, 1);
+    }
     if (ok && record->hmac_secret) {
         ok = zf_cbor_encode_uint(&enc, ZfRecordKeyHmacSecretWrapped) &&
              zf_cbor_encode_bytes(&enc, hmac_secret_wrapped, sizeof(hmac_secret_wrapped)) &&
@@ -588,6 +592,14 @@ static bool zf_record_decode_field(ZfCborCursor *cursor, uint64_t key, ZfCredent
             return false;
         }
         record->cred_protect = (uint8_t)raw;
+        return true;
+    }
+    case ZfRecordKeyBound: {
+        uint64_t raw = 0;
+        if (!zf_cbor_read_uint(cursor, &raw) || raw != 1U) {
+            return false;
+        }
+        record->bound = true;
         return true;
     }
     default:

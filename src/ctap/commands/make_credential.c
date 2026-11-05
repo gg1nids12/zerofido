@@ -32,6 +32,8 @@
 #include "../../zerofido_crypto.h"
 #include "../../zerofido_notify.h"
 #include "../../zerofido_store.h"
+#include "../../pin/vault.h"
+#include "../../store/binding.h"
 
 #if defined(ZF_RELEASE_DIAGNOSTICS) && ZF_RELEASE_DIAGNOSTICS
 #define ZF_CTAP_MC_DIAG(text) FURI_LOG_I("ZeroFIDO:CTAP", "MC %s", (text))
@@ -189,6 +191,15 @@ uint8_t zf_ctap_handle_make_credential(ZerofidoApp *app, ZfTransportSessionId se
         goto cleanup;
     }
     ZF_CTAP_MC_DIAG("keygen done");
+    /*
+     * tpm branch: a passkey created with a PIN check is bound to the PIN.
+     * Fail closed if the vault is not open — never create it unbound.
+     */
+    if (resident_key && uv_verified &&
+        (!zf_vault_is_unlocked() || !zf_store_bind_record(&scratch->record))) {
+        status = ZF_CTAP_ERR_OTHER;
+        goto cleanup;
+    }
     ZF_CTAP_MC_DIAG("response");
     ZfAttestationMode attestation_mode = scratch->request.has_attestation_format_preference
                                              ? scratch->request.preferred_attestation_mode

@@ -1229,6 +1229,8 @@ static void test_permission_scoped_pin_token_rejects_browser_style_replay_after_
     expect(response_len > 1, "browser-style makeCredential should succeed");
     expect(response[0] == ZF_CTAP_SUCCESS, "browser-style makeCredential should return success");
     expect(app.store.count == 1, "browser-style makeCredential should persist a credential");
+    expect(app.store.records[0].bound,
+           "tpm branch: passkey created with a PIN check is stored PIN-bound");
     expect(app.pin_state.pin_token_permissions == 0,
            "browser-style makeCredential should consume mc/ga token permissions");
     expect(zf_crypto_hmac_sha256(app.pin_state.pin_token, sizeof(app.pin_state.pin_token),

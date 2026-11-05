@@ -871,6 +871,39 @@ bool zf_crypto_sign_hash(const ZfCredentialRecord *record, const uint8_t hash[32
     return true;
 }
 
+/* tpm branch: host stand-ins for the PIN-bound inner layer (XOR with key). */
+bool zf_crypto_inner_crypt(const uint8_t inner_key[32], const uint8_t *input, uint8_t *output,
+                           size_t size, bool encrypt) {
+    UNUSED(encrypt);
+    if (!inner_key || !input || !output) {
+        return false;
+    }
+    for (size_t i = 0; i < size; ++i) {
+        output[i] = input[i] ^ inner_key[i % 32];
+    }
+    return true;
+}
+
+bool zf_crypto_rewrap_private_key(ZfCredentialRecord *record, const uint8_t inner_key[32],
+                                  bool bind) {
+    if (!record || !inner_key || record->bound == bind) {
+        return false;
+    }
+    for (size_t i = 0; i < sizeof(record->private_wrapped); ++i) {
+        record->private_wrapped[i] ^= inner_key[i % 32];
+    }
+    return true;
+}
+
+bool zf_crypto_sign_hash_ex(const ZfCredentialRecord *record, const uint8_t *inner_key,
+                            const uint8_t hash[32], uint8_t *out, size_t out_capacity,
+                            size_t *out_len) {
+    if (!record || (record->bound && !inner_key)) {
+        return false;
+    }
+    return zf_crypto_sign_hash(record, hash, out, out_capacity, out_len);
+}
+
 bool zf_crypto_constant_time_equal(const uint8_t *left, const uint8_t *right, size_t size) {
     uint8_t diff = 0;
     for (size_t i = 0; i < size; ++i) {
@@ -1358,6 +1391,7 @@ bool zf_u2f_adapter_is_available(const ZerofidoApp *app) {
 #include "../../../src/pin/core/plaintext.c"
 #include "../../../src/pin/core/lifecycle.c"
 #include "../../../src/pin/core/vault.c"
+#include "../../../src/store/binding.c"
 #include "../../../src/pin/client_pin/parse.c"
 #include "../../../src/pin/client_pin/response.c"
 #include "../../../src/pin/client_pin/operations.c"
@@ -1450,6 +1484,7 @@ static const uint8_t *test_pin_hash_1234(void) {
 #include "subsystems/ctap/command_tests.inc"
 #include "subsystems/store/atomic_counter_tests.inc"
 #include "subsystems/pin/vault_tests.inc"
+#include "subsystems/store/binding_tests.inc"
 
 int main(void) {
     test_command_scratch_is_allocated_lifetime_and_single_owner();
@@ -1682,6 +1717,7 @@ int main(void) {
     test_store_file_write_and_load_fail_closed_without_counter_floor_crypto();
     test_store_counter_reservation_failure_does_not_publish_counter();
     run_vault_tests();
+    run_binding_tests();
     puts("native protocol regressions passed");
     return 0;
 }

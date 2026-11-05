@@ -258,17 +258,74 @@ cleanup:
 /* Signs with a stored credential after decrypting its wrapped private scalar. */
 bool zf_crypto_sign_hash(const ZfCredentialRecord *record, const uint8_t hash[32], uint8_t *out,
                          size_t out_capacity, size_t *out_len) {
+    return zf_crypto_sign_hash_ex(record, NULL, hash, out, out_capacity, out_len);
+}
+
+/* tpm branch: zero-IV AES-256-CBC with a per-credential key (unique per record). */
+bool zf_crypto_inner_crypt(const uint8_t inner_key[32], const uint8_t *input, uint8_t *output,
+                           size_t size, bool encrypt) {
+    if (!inner_key || !input || !output) {
+        return false;
+    }
+    return encrypt ? zf_crypto_aes256_cbc_zero_iv_encrypt(inner_key, input, output, size)
+                   : zf_crypto_aes256_cbc_zero_iv_decrypt(inner_key, input, output, size);
+}
+
+/* tpm branch: adds (bind) or removes the inner layer; a new DUK IV each time. */
+bool zf_crypto_rewrap_private_key(ZfCredentialRecord *record, const uint8_t inner_key[32],
+                                  bool bind) {
+    uint8_t outer[ZF_PRIVATE_KEY_LEN] = {0};
+    uint8_t next[ZF_PRIVATE_KEY_LEN] = {0};
+    uint8_t iv[ZF_WRAP_IV_LEN] = {0};
+    uint8_t wrapped[ZF_PRIVATE_KEY_LEN] = {0};
     bool ok = false;
-    uint8_t private_key[ZF_PRIVATE_KEY_LEN] = {0};
 
     do {
-        if (!zf_unwrap_private_key(record, private_key)) {
+        if (!record || !inner_key || record->bound == bind ||
+            !zf_unwrap_private_key(record, outer) ||
+            !zf_crypto_inner_crypt(inner_key, outer, next, sizeof(next), bind)) {
+            break;
+        }
+        furi_hal_random_fill_buf(iv, sizeof(iv));
+        if (!furi_hal_crypto_enclave_load_key(ZF_UNIQUE_KEY_SLOT, iv)) {
+            break;
+        }
+        ok = furi_hal_crypto_encrypt(next, wrapped, sizeof(wrapped));
+        furi_hal_crypto_enclave_unload_key(ZF_UNIQUE_KEY_SLOT);
+        if (ok) {
+            memcpy(record->private_wrapped, wrapped, sizeof(wrapped));
+            memcpy(record->private_iv, iv, sizeof(iv));
+        }
+    } while (false);
+
+    zf_crypto_secure_zero(outer, sizeof(outer));
+    zf_crypto_secure_zero(next, sizeof(next));
+    zf_crypto_secure_zero(wrapped, sizeof(wrapped));
+    return ok;
+}
+
+/* Signs with a stored credential; bound credentials need the inner key. */
+bool zf_crypto_sign_hash_ex(const ZfCredentialRecord *record, const uint8_t *inner_key,
+                            const uint8_t hash[32], uint8_t *out, size_t out_capacity,
+                            size_t *out_len) {
+    bool ok = false;
+    uint8_t private_key[ZF_PRIVATE_KEY_LEN] = {0};
+    uint8_t outer[ZF_PRIVATE_KEY_LEN] = {0};
+
+    do {
+        if (!record || (record->bound && !inner_key) ||
+            !zf_unwrap_private_key(record, record->bound ? outer : private_key)) {
+            break;
+        }
+        if (record->bound &&
+            !zf_crypto_inner_crypt(inner_key, outer, private_key, sizeof(private_key), false)) {
             break;
         }
         ok = zf_crypto_sign_hash_with_private_key(private_key, hash, out, out_capacity, out_len);
     } while (false);
 
     zf_crypto_secure_zero(private_key, sizeof(private_key));
+    zf_crypto_secure_zero(outer, sizeof(outer));
     return ok;
 }
 

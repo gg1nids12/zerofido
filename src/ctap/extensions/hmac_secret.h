@@ -32,6 +32,7 @@ typedef struct {
     uint8_t salt_plain[ZF_HMAC_SECRET_SALT_MAX_LEN];
     uint8_t output_plain[ZF_HMAC_SECRET_SALT_MAX_LEN];
     uint8_t output_enc[ZF_HMAC_SECRET_OUTPUT_MAX_LEN];
+    uint8_t cred_random[ZF_HMAC_SECRET_LEN]; /* tpm branch: clear CredRandom */
     ZfHmacSha256Scratch hmac_scratch;
 } ZfHmacSecretScratch;
 

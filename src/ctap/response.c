@@ -25,6 +25,7 @@
 #include "../zerofido_attestation.h"
 #include "../zerofido_cbor.h"
 #include "../zerofido_crypto.h"
+#include "../store/binding.h"
 #if defined(ZF_RELEASE_DIAGNOSTICS) && ZF_RELEASE_DIAGNOSTICS
 #define ZF_CTAP_RESPONSE_DIAG(text) FURI_LOG_I("ZeroFIDO:CTAP", "MC response %s", (text))
 #else
@@ -458,9 +459,18 @@ uint8_t zf_ctap_build_assertion_response_with_scratch(
     zf_crypto_sha256_concat(scratch->auth_data, auth_data_len, request->client_data_hash,
                             sizeof(request->client_data_hash), scratch->sign_hash);
 
-    if (!zf_crypto_sign_hash(record, scratch->sign_hash, scratch->signature,
-                             sizeof(scratch->signature), &signature_len)) {
-        goto cleanup;
+    {
+        /* tpm branch: bound credentials sign only with the vault unlocked. */
+        uint8_t inner_key[32];
+        bool have_inner = record->bound && zf_store_record_inner_key(record, inner_key);
+        bool signed_ok = (!record->bound || have_inner) &&
+                         zf_crypto_sign_hash_ex(record, have_inner ? inner_key : NULL,
+                                                scratch->sign_hash, scratch->signature,
+                                                sizeof(scratch->signature), &signature_len);
+        zf_crypto_secure_zero(inner_key, sizeof(inner_key));
+        if (!signed_ok) {
+            goto cleanup;
+        }
     }
 
     ZfCborEncoder enc;

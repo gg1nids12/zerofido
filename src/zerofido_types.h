@@ -210,6 +210,9 @@ typedef struct {
     bool hmac_secret;
     uint8_t hmac_secret_without_uv[ZF_HMAC_SECRET_LEN];
     uint8_t hmac_secret_with_uv[ZF_HMAC_SECRET_LEN];
+    /* tpm branch: private key and hmac-secret carry an inner layer under the
+     * PIN vault record key (pin/vault.h); usable only after a PIN check. */
+    bool bound;
 } ZfCredentialRecord;
 
 typedef struct {
@@ -234,6 +237,7 @@ typedef struct {
     uint32_t counter_high_water;
     uint32_t created_at;
     uint8_t cred_protect;
+    bool bound; /* tpm branch: see ZfCredentialRecord.bound */
 } ZfCredentialIndexEntry;
 
 typedef struct {

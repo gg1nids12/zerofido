@@ -104,7 +104,8 @@ bool zf_ctap_exclude_list_has_visible_match(Storage *storage, const ZfCredential
     for (size_t i = 0; i < match_count; ++i) {
         const ZfCredentialIndexEntry *entry = &store->records[matches[i]];
 
-        if (!uv_verified && entry->cred_protect == ZF_CRED_PROTECT_UV_REQUIRED) {
+        if (!uv_verified &&
+            (entry->cred_protect == ZF_CRED_PROTECT_UV_REQUIRED || entry->bound)) {
             continue;
         }
         if (storage) {
@@ -127,6 +128,10 @@ static bool zf_ctap_credential_is_allowed_by_cred_protect(const ZfGetAssertionRe
                                                           const ZfCredentialIndexEntry *record,
                                                           bool uv_verified) {
     if (!record) {
+        return false;
+    }
+    /* tpm branch: PIN-bound credentials are usable only after a PIN check. */
+    if (record->bound && !uv_verified) {
         return false;
     }
 
