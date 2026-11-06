@@ -66,7 +66,8 @@ static const uint8_t zf_vault_zero_chunk[ZF_VAULT_CHUNK];
 static uint8_t zf_vault_chunk_out[ZF_VAULT_CHUNK];
 
 static bool zf_vault_rounds_valid(uint32_t rounds) {
-    return rounds >= ZF_VAULT_MIN_ROUNDS && (rounds % (ZF_VAULT_CHUNK / ZF_VAULT_BLOCK)) == 0U;
+    return rounds >= ZF_VAULT_MIN_ROUNDS && rounds <= ZF_VAULT_MAX_ROUNDS &&
+           (rounds % (ZF_VAULT_CHUNK / ZF_VAULT_BLOCK)) == 0U;
 }
 
 /*
@@ -199,10 +200,17 @@ static bool zf_vault_write(Storage *storage, const ZfVaultFile *file) {
               zf_storage_write_file_atomic(storage, ZF_VAULT_FILE_PATH, ZF_VAULT_FILE_TEMP_PATH,
                                            (const uint8_t *)file, sizeof(*file));
     if (ok) {
-        /* The mirror is best effort; the primary decides success. */
-        (void)zf_storage_write_file_atomic(storage, ZF_VAULT_MIRROR_PATH,
-                                           ZF_VAULT_MIRROR_TEMP_PATH, (const uint8_t *)file,
-                                           sizeof(*file));
+        /*
+         * The mirror is best effort; the primary decides success. A mirror that
+         * could not be updated is removed: a stale copy must not outlive a PIN
+         * change (review 2026-11-06).
+         */
+        if (!zf_storage_write_file_atomic(storage, ZF_VAULT_MIRROR_PATH,
+                                          ZF_VAULT_MIRROR_TEMP_PATH, (const uint8_t *)file,
+                                          sizeof(*file))) {
+            (void)zf_storage_remove_atomic_file(storage, ZF_VAULT_MIRROR_PATH,
+                                                ZF_VAULT_MIRROR_TEMP_PATH);
+        }
     }
     return ok;
 }
@@ -235,6 +243,16 @@ void zf_vault_reset_runtime(void) {
 }
 
 bool zf_vault_load(Storage *storage) {
+    return zf_vault_load_expect(storage, NULL);
+}
+
+static bool zf_vault_verifier_is(const ZfVaultFile *file,
+                                 const uint8_t expected[ZF_VAULT_VERIFIER_LEN]) {
+    return !expected ||
+           zf_crypto_constant_time_equal(file->verifier, expected, ZF_VAULT_VERIFIER_LEN);
+}
+
+bool zf_vault_load_expect(Storage *storage, const uint8_t expected[ZF_VAULT_VERIFIER_LEN]) {
     ZfVaultFile primary;
     ZfVaultFile mirror;
     int p = 0;
@@ -243,10 +261,16 @@ bool zf_vault_load(Storage *storage) {
     zf_vault_reset_runtime();
     p = zf_vault_read_one(storage, ZF_VAULT_FILE_PATH, ZF_VAULT_FILE_TEMP_PATH, &primary);
     m = zf_vault_read_one(storage, ZF_VAULT_MIRROR_PATH, ZF_VAULT_MIRROR_TEMP_PATH, &mirror);
-    if (p == 1) {
+    if (p == 1 && m == 1 && !zf_vault_verifier_is(&primary, expected) &&
+        zf_vault_verifier_is(&mirror, expected)) {
+        g_vault.file = mirror; /* the primary is not the current vault; the mirror is */
+        g_vault.present = true;
+        g_vault.repair_pending = true;
+    } else if (p == 1) {
         g_vault.file = primary;
         g_vault.present = true;
-        if (m == 1 && memcmp(&primary, &mirror, sizeof(primary)) != 0) {
+        if (m == 1 && memcmp(&primary, &mirror, sizeof(primary)) != 0 &&
+            zf_vault_verifier_is(&mirror, expected)) {
             g_vault.alt = mirror;
             g_vault.alt_present = true;
         }
@@ -383,26 +407,59 @@ bool zf_vault_destroy(Storage *storage) {
     return ok;
 }
 
+/*
+ * The UI tick (lock on timeout) and the transport worker (record keys) touch
+ * the PMK from different threads; short critical sections keep a key from
+ * being derived from a half-wiped PMK (review 2026-11-06).
+ */
 void zf_vault_lock(void) {
+    FURI_CRITICAL_ENTER();
     zf_crypto_secure_zero(g_vault.pmk, sizeof(g_vault.pmk));
     g_vault.unlocked = false;
     g_vault.unlocked_at = 0;
+    FURI_CRITICAL_EXIT();
 }
 
 void zf_vault_tick(void) {
-    if (g_vault.unlocked &&
-        (int32_t)(furi_get_tick() - g_vault.unlocked_at) >= (int32_t)ZF_VAULT_UNLOCK_TIMEOUT_MS) {
+    bool expired = false;
+
+    FURI_CRITICAL_ENTER();
+    expired = g_vault.unlocked && (int32_t)(furi_get_tick() - g_vault.unlocked_at) >=
+                                      (int32_t)ZF_VAULT_UNLOCK_TIMEOUT_MS;
+    FURI_CRITICAL_EXIT();
+    if (expired) {
         zf_vault_lock();
     }
+}
+
+void zf_vault_touch(void) {
+    FURI_CRITICAL_ENTER();
+    if (g_vault.unlocked) {
+        g_vault.unlocked_at = furi_get_tick();
+    }
+    FURI_CRITICAL_EXIT();
 }
 
 bool zf_vault_record_key(const uint8_t *credential_id, size_t credential_id_len,
                          uint8_t out[ZF_VAULT_KEY_LEN]) {
     static const char salt[] = "zerofido-cred-v1";
+    uint8_t pmk[ZF_VAULT_KEY_LEN];
+    bool unlocked = false;
+    bool ok = false;
 
-    if (!zf_vault_is_unlocked() || !credential_id || credential_id_len == 0U || !out) {
+    if (!credential_id || credential_id_len == 0U || !out) {
         return false;
     }
-    return zf_crypto_hkdf_sha256((const uint8_t *)salt, sizeof(salt) - 1U, g_vault.pmk,
-                                 sizeof(g_vault.pmk), credential_id, credential_id_len, out);
+    FURI_CRITICAL_ENTER();
+    unlocked = g_vault.present && g_vault.unlocked;
+    if (unlocked) {
+        memcpy(pmk, g_vault.pmk, sizeof(pmk));
+    }
+    FURI_CRITICAL_EXIT();
+    if (unlocked) {
+        ok = zf_crypto_hkdf_sha256((const uint8_t *)salt, sizeof(salt) - 1U, pmk, sizeof(pmk),
+                                   credential_id, credential_id_len, out);
+    }
+    zf_crypto_secure_zero(pmk, sizeof(pmk));
+    return ok;
 }

@@ -1679,7 +1679,9 @@ static void zerofido_auto_transport_tick(ZerofidoApp *app) {
                      diag.pairing_status, diag.pairing_reason, diag.mtu, diag.notify_on,
                      diag.revision, diag.writes, diag.disconnect_reason);
         }
+        zf_ble_link_tick(link); /* expire partial or stale BLE requests */
         bool ble_work = zf_ble_link_has_work(link);
+        bool usb_host = false;
         bool ble_recent = zf_ble_link_is_connected(link) &&
                           (uint32_t)(now - zf_ble_link_last_activity(link)) < 10000U;
         ZfTransportMode mode;
@@ -1688,11 +1690,17 @@ static void zerofido_auto_transport_tick(ZerofidoApp *app) {
         mode = app->runtime_config.transport_mode;
         busy = app->approval.state == ZfApprovalPending || app->maintenance_busy ||
                !app->startup_complete;
+        /*
+         * Review 2026-11-06: with the cable in a PC, USB wins. Windows may ask
+         * every authenticator at once; a BLE request must not stop the USB
+         * worker in the middle of a USB sign-in. Stale BLE requests expire.
+         */
+        usb_host = mode == ZfTransportModeUsbHid && app->transport_connected;
         furi_mutex_release(app->ui_mutex);
         if (mode == ZfTransportModeBle && (ble_work || ble_recent || busy)) {
             return;
         }
-        if (mode != ZfTransportModeBle && ble_work && !busy &&
+        if (mode != ZfTransportModeBle && ble_work && !busy && !usb_host &&
             (int32_t)(now - ble_retry_at) >= 0) {
             bool ok = zf_app_lifecycle_switch_transport_runtime(app, ZfTransportModeBle);
             if (!ok) {

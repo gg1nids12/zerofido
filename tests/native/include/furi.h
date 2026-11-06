@@ -5,6 +5,9 @@
 #include <stdint.h>
 
 #define UNUSED(x) ((void)(x))
+/* Host tests are single-threaded. */
+#define FURI_CRITICAL_ENTER() ((void)0)
+#define FURI_CRITICAL_EXIT() ((void)0)
 
 typedef struct FuriSemaphore FuriSemaphore;
 typedef struct FuriTimer FuriTimer;

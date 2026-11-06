@@ -36,6 +36,8 @@
 #define ZF_VAULT_DEFAULT_ROUNDS 190464UL
 #endif
 #define ZF_VAULT_MIN_ROUNDS 32UL
+/* Review 2026-11-06: a damaged or planted file must not stall PIN checks for hours. */
+#define ZF_VAULT_MAX_ROUNDS (ZF_VAULT_DEFAULT_ROUNDS * 8UL)
 /* The PMK stays in RAM at most this long after a successful PIN check. */
 #define ZF_VAULT_UNLOCK_TIMEOUT_MS (ZF_PIN_TOKEN_TIMEOUT_MS + 2000U)
 
@@ -43,6 +45,13 @@ typedef void (*ZfVaultProgressFn)(void *context);
 
 /* Startup: read vault.bin. Returns false only on a malformed file. */
 bool zf_vault_load(Storage *storage);
+
+/*
+ * Same, with the verifier recorded in the sealed PIN state (or NULL). That
+ * state names the current vault: a copy with another verifier (for example a
+ * mirror left from before a PIN change) is never used as a fallback.
+ */
+bool zf_vault_load_expect(Storage *storage, const uint8_t expected[ZF_VAULT_VERIFIER_LEN]);
 bool zf_vault_is_present(void);
 bool zf_vault_is_unlocked(void);
 
@@ -73,6 +82,12 @@ void zf_vault_lock(void);
 
 /* Locks if the unlock timeout has passed. Cheap; call from periodic code. */
 void zf_vault_tick(void);
+
+/*
+ * Restarts the unlock timeout. Called when a request proves the PIN token, so
+ * the PMK lasts through that request's OK wait (up to ZF_APPROVAL_TIMEOUT_MS).
+ */
+void zf_vault_touch(void);
 
 /* Per-credential key K_rec = HKDF(PMK, credential_id). Requires unlocked. */
 bool zf_vault_record_key(const uint8_t *credential_id, size_t credential_id_len,

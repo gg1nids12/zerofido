@@ -26,6 +26,7 @@
 #define ZF_BLE_FRAG_MIN 20U
 #define ZF_BLE_FRAG_MAX 240U /* fits one HCI event / command with headers */
 #define ZF_BLE_RX_TIMEOUT_MS 3000U
+#define ZF_BLE_STALE_MS 5000U /* a complete request nobody took is dropped */
 #define ZF_BLE_KEYS_PATH ZF_APP_DATA_DIR "/.bt_fido.keys"
 #define ZF_BLE_REVISION_FIDO2 0x20U
 
@@ -224,6 +225,7 @@ static void zf_ble_rx_drop_locked(ZfBleLink *link) {
 
 static void zf_ble_rx_fail_locked(ZfBleLink *link, uint8_t error) {
     zf_ble_rx_drop_locked(link);
+    link->rx_tick = furi_get_tick();
     link->pending_error = error;
     zf_ble_signal_locked(link);
 }
@@ -641,11 +643,26 @@ bool zf_ble_link_send(ZfBleLink *link, uint8_t cmd, const uint8_t *data, size_t 
     return ok;
 }
 
-/* Abandons a request whose continuation frames stopped coming. */
+/*
+ * Abandons a request whose continuation frames stopped coming. Review
+ * 2026-11-06: a complete request (or error) that no BLE worker took within a
+ * few seconds is dropped too, so an old request cannot pop up later (called
+ * from the UI tick as well, when another transport is active).
+ */
 void zf_ble_link_tick(ZfBleLink *link) {
+    uint32_t idle = 0;
+
     furi_mutex_acquire(link->mutex, FuriWaitForever);
-    if (link->rx_active && (uint32_t)(furi_get_tick() - link->rx_tick) > ZF_BLE_RX_TIMEOUT_MS) {
+    idle = furi_get_tick() - link->rx_tick;
+    if (link->rx_active && idle > ZF_BLE_RX_TIMEOUT_MS) {
         zf_ble_rx_fail_locked(link, ZF_BLE_ERR_REQ_TIMEOUT);
+    } else if (!link->busy && idle > ZF_BLE_STALE_MS) {
+        if (link->msg_ready) {
+            zf_ble_rx_drop_locked(link);
+        }
+        if (!link->worker) {
+            link->pending_error = 0;
+        }
     }
     furi_mutex_release(link->mutex);
 }

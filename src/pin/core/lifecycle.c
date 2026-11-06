@@ -49,7 +49,7 @@ ZfPinInitResult zerofido_pin_init_with_result(Storage *storage, ZfClientPinState
      * tpm branch: the vault is authoritative for the PIN. A vault without a set
      * PIN is left over from an interrupted setPin or clear and is removed.
      */
-    if (!zf_vault_load(storage)) {
+    if (!zf_vault_load_expect(storage, load_status == ZfPinLoadOk ? state->pin_hash : NULL)) {
         zf_crypto_secure_zero(state->pin_hash, sizeof(state->pin_hash));
         return ZfPinInitInvalidPersistedState;
     }

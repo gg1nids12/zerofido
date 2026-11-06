@@ -50,7 +50,15 @@ static bool zerofido_ui_finish_interaction_locked(ZerofidoApp *app, ZfApprovalSt
 typedef struct {
     char action[24];
     char site[72];
+    uint32_t shown_at; /* tick when the request appeared */
 } ZfApprovalModel;
+
+/*
+ * Review 2026-11-06: an OK press that was meant for something else (the menu,
+ * a screen that just changed) must not approve a request that popped up at the
+ * same moment. OK works after this delay; Left/Back deny at once.
+ */
+#define ZF_APPROVAL_OK_GUARD_MS 400U
 
 static void zerofido_approval_finish(ZerofidoApp *app, bool approved) {
     bool finished = false;
@@ -76,13 +84,15 @@ static void zerofido_approval_draw(Canvas *canvas, void *model) {
     canvas_set_font(canvas, FontSecondary);
     canvas_draw_icon(canvas, 8, 14, &I_Drive_112x35);
     canvas_draw_icon(canvas, 22, 15, &I_Auth_62x31);
+    /*
+     * Review 2026-11-06: a long site name is cut at the start, not the end. The
+     * registrable domain is at the end; "paypal.com.evil.example" must not show
+     * as "paypal.com.ev..".
+     */
     snprintf(line, sizeof(line), "%s: %s", approval->action, approval->site);
-    len = strlen(line);
-    while (len > 4 && canvas_string_width(canvas, line) > 124) {
-        len--;
-        line[len - 2] = '.';
-        line[len - 1] = '.';
-        line[len] = '\0';
+    len = strlen(approval->site);
+    for (size_t skip = 1; skip < len && canvas_string_width(canvas, line) > 124; ++skip) {
+        snprintf(line, sizeof(line), "%s: ..%s", approval->action, approval->site + skip);
     }
     canvas_draw_str_aligned(canvas, 128 / 2, 3, AlignCenter, AlignTop, line);
     elements_button_center(canvas, "OK");
@@ -94,8 +104,19 @@ static bool zerofido_approval_input(InputEvent *event, void *context) {
     if (event->type != InputTypeShort) {
         return false;
     }
-    if (event->key == InputKeyOk || event->key == InputKeyLeft) {
-        zerofido_approval_finish(app, event->key == InputKeyOk);
+    if (event->key == InputKeyOk) {
+        uint32_t shown_at = 0;
+
+        with_view_model(app->approval_view, ZfApprovalModel * model,
+                        { shown_at = model->shown_at; }, false);
+        if ((uint32_t)(furi_get_tick() - shown_at) < ZF_APPROVAL_OK_GUARD_MS) {
+            return true; /* too early: ignore, the request stays on screen */
+        }
+        zerofido_approval_finish(app, true);
+        return true;
+    }
+    if (event->key == InputKeyLeft) {
+        zerofido_approval_finish(app, false);
         return true;
     }
     return false; /* Back goes to navigation, which denies a pending request */
@@ -283,6 +304,7 @@ void zerofido_ui_show_interaction(ZerofidoApp *app) {
                          zerofido_approval_action(app->approval.details.approval.operation));
                 snprintf(model->site, sizeof(model->site), "%.71s",
                          app->approval.target_id[0] ? app->approval.target_id : "(unknown)");
+                model->shown_at = furi_get_tick();
             },
             true);
         furi_mutex_release(app->ui_mutex);

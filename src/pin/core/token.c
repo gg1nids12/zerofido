@@ -292,6 +292,7 @@ uint8_t zerofido_pin_require_auth(Storage *storage, ZfClientPinState *state, boo
             zf_pin_consume_up_tested_permissions(state, required_permissions);
         }
         *uv_verified = true;
+        zf_vault_touch(); /* review 2026-11-06: PMK lasts through this request's OK wait */
         zf_crypto_secure_zero(expected, sizeof(expected));
 #if ZF_USB_DIAGNOSTICS
         zf_pin_usb_diag_status(storage, "ok", ZF_CTAP_SUCCESS);

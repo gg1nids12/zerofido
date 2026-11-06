@@ -163,11 +163,36 @@ uint8_t zf_pin_verify_hash(Storage *storage, ZfClientPinState *state,
  * verifier for the PIN file seal. A PIN set by an older version (no vault)
  * is compared once against the stored hash and then migrated to a vault.
  */
+/*
+ * Review 2026-11-06: CTAP decrements pinRetries before verifying. The check
+ * takes about a second; with the retry written only after a failure, cutting
+ * the power during the check would hide a wrong guess. A copy of the state
+ * with one retry less is stored first; a success writes the full count back.
+ */
+static bool zf_pin_reserve_attempt(Storage *storage, const ZfClientPinState *state) {
+    ZfClientPinState reserved = *state;
+    bool ok = false;
+
+    if (reserved.pin_retries == 0U) {
+        return false;
+    }
+    reserved.pin_retries--;
+    ok = zf_pin_persist_state(storage, &reserved);
+    zf_crypto_secure_zero(&reserved, sizeof(reserved));
+    if (ok) {
+        zf_pin_mirror_dirty = true; /* the success path must restore the count */
+    }
+    return ok;
+}
+
 bool zf_pin_check_hash(Storage *storage, ZfClientPinState *state,
                        const uint8_t pin_hash[ZF_PIN_HASH_LEN]) {
     uint8_t verifier[ZF_VAULT_VERIFIER_LEN];
     bool ok = false;
 
+    if (!zf_pin_reserve_attempt(storage, state)) {
+        return false; /* no retry left, or storage refuses: fail closed */
+    }
     if (zf_vault_is_present()) {
         ok = zf_vault_unlock(pin_hash);
         if (ok) {

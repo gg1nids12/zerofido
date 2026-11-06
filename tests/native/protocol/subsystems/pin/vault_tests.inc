@@ -268,7 +268,94 @@ static void test_vault_mirror_survives_damaged_primary(void) {
            "primary recreated");
 }
 
+
+/* Review 2026-11-06: a mirror left from before a PIN change must not revive the old PIN. */
+static void test_vault_stale_mirror_does_not_revive_old_pin(void) {
+    Storage storage = {0};
+    uint8_t old_pin[ZF_PIN_HASH_LEN];
+    uint8_t new_pin[ZF_PIN_HASH_LEN];
+    uint8_t v_old[ZF_VAULT_VERIFIER_LEN];
+    uint8_t v_new[ZF_VAULT_VERIFIER_LEN];
+    uint8_t old_blob[200];
+    size_t size = 0;
+
+    test_storage_reset();
+    test_vault_hash("stale old pin", old_pin);
+    test_vault_hash("stale new pin", new_pin);
+    expect(zf_vault_create(&storage, old_pin, v_old), "vault create for stale mirror");
+    expect(zf_storage_read_file(&storage, ZF_VAULT_MIRROR_PATH, old_blob, sizeof(old_blob), &size) &&
+               size == 124U,
+           "keep the old mirror");
+    expect(zf_vault_rewrap(&storage, new_pin, v_new), "PIN change rewraps");
+    expect(zf_storage_write_file_atomic(&storage, ZF_VAULT_MIRROR_PATH, ZF_VAULT_MIRROR_TEMP_PATH,
+                                        old_blob, size),
+           "simulate a mirror that missed the PIN change");
+    zf_vault_reset_runtime();
+    expect(zf_vault_load_expect(&storage, v_new), "load with the current verifier");
+    if (memcmp(v_old, v_new, sizeof(v_old)) != 0) { /* host HMAC stub may fold them */
+        expect(!zf_vault_unlock(old_pin), "stale mirror must not open with the old PIN");
+    }
+    expect(zf_vault_unlock(new_pin), "new PIN opens the current vault");
+}
+
+/* Review 2026-11-06: an absurd stretch count is a malformed file, not an hours-long check. */
+static void test_vault_rejects_huge_rounds(void) {
+    Storage storage = {0};
+    uint8_t pin[ZF_PIN_HASH_LEN];
+    uint8_t verifier[ZF_VAULT_VERIFIER_LEN];
+    uint8_t blob[200];
+    size_t size = 0;
+    uint32_t rounds = (uint32_t)(ZF_VAULT_MAX_ROUNDS + 32UL);
+
+    test_storage_reset();
+    test_vault_hash("rounds cap pin", pin);
+    expect(zf_vault_create(&storage, pin, verifier), "vault create for rounds cap");
+    expect(zf_storage_read_file(&storage, ZF_VAULT_FILE_PATH, blob, sizeof(blob), &size),
+           "read vault for rounds cap");
+    memcpy(blob + 8U, &rounds, sizeof(rounds));
+    expect(zf_storage_write_file_atomic(&storage, ZF_VAULT_FILE_PATH, ZF_VAULT_FILE_TEMP_PATH, blob,
+                                        size) &&
+               zf_storage_write_file_atomic(&storage, ZF_VAULT_MIRROR_PATH,
+                                            ZF_VAULT_MIRROR_TEMP_PATH, blob, size),
+           "write vault with huge rounds");
+    zf_vault_reset_runtime();
+    expect(!zf_vault_load(&storage), "huge rounds are rejected as malformed");
+}
+
+/* Review 2026-11-06: the retry is stored before the slow check (power cut safe). */
+static void test_pin_retry_reserved_before_check(void) {
+    Storage storage = {0};
+    ZfClientPinState state;
+    ZfClientPinState reloaded;
+    uint8_t good[ZF_PIN_HASH_LEN];
+    uint8_t bad[ZF_PIN_HASH_LEN];
+
+    test_storage_reset();
+    expect(zerofido_pin_init(&storage, &state), "init PIN state for retry reserve");
+    expect(zerofido_pin_set_plaintext(&storage, &state, "1234") == ZF_CTAP_SUCCESS,
+           "set PIN for retry reserve");
+    test_vault_hash("1234", good);
+    test_vault_hash("9999", bad);
+
+    /* wrong PIN, then "power cut": no failure handler runs */
+    expect(!zf_pin_check_hash(&storage, &state, bad), "wrong PIN fails");
+    expect(zerofido_pin_init(&storage, &reloaded), "reload after cut");
+    expect(reloaded.pin_retries == ZF_PIN_RETRIES_MAX - 1U,
+           "the wrong guess is already counted on the card");
+
+    /* right PIN with the normal success handler restores the count */
+    expect(zerofido_pin_init(&storage, &state), "reload before the right PIN");
+    expect(zf_pin_check_hash(&storage, &state, good) &&
+               zf_pin_auth_success(&storage, &state) == ZF_CTAP_SUCCESS,
+           "right PIN passes");
+    expect(zerofido_pin_init(&storage, &reloaded), "reload after success");
+    expect(reloaded.pin_retries == ZF_PIN_RETRIES_MAX, "success restores all retries");
+}
+
 static void run_vault_tests(void) {
+    test_vault_stale_mirror_does_not_revive_old_pin();
+    test_vault_rejects_huge_rounds();
+    test_pin_retry_reserved_before_check();
     test_vault_mirror_survives_damaged_primary();
     test_vault_stretch_sends_keepalives();
     test_vault_create_unlock_and_wrong_pin();
