@@ -53,6 +53,9 @@ static struct {
     bool present;
     bool unlocked;
     ZfVaultFile file;
+    ZfVaultFile alt; /* mirror copy when it differs from the primary */
+    bool alt_present;
+    bool repair_pending; /* the copy in use came from the mirror */
     uint8_t pmk[ZF_VAULT_KEY_LEN];
     uint32_t unlocked_at;
     ZfVaultProgressFn progress;
@@ -192,9 +195,34 @@ static bool zf_vault_seal(const uint8_t pin_hash[ZF_PIN_HASH_LEN],
 }
 
 static bool zf_vault_write(Storage *storage, const ZfVaultFile *file) {
-    return zf_storage_ensure_app_data_dir(storage) &&
-           zf_storage_write_file_atomic(storage, ZF_VAULT_FILE_PATH, ZF_VAULT_FILE_TEMP_PATH,
-                                        (const uint8_t *)file, sizeof(*file));
+    bool ok = zf_storage_ensure_app_data_dir(storage) &&
+              zf_storage_write_file_atomic(storage, ZF_VAULT_FILE_PATH, ZF_VAULT_FILE_TEMP_PATH,
+                                           (const uint8_t *)file, sizeof(*file));
+    if (ok) {
+        /* The mirror is best effort; the primary decides success. */
+        (void)zf_storage_write_file_atomic(storage, ZF_VAULT_MIRROR_PATH,
+                                           ZF_VAULT_MIRROR_TEMP_PATH, (const uint8_t *)file,
+                                           sizeof(*file));
+    }
+    return ok;
+}
+
+/* Reads and checks one vault file: 1 = valid, 0 = missing, -1 = malformed. */
+static int zf_vault_read_one(Storage *storage, const char *path, const char *temp_path,
+                             ZfVaultFile *out) {
+    size_t size = 0;
+
+    zf_storage_recover_atomic_file(storage, path, temp_path);
+    if (!storage_file_exists(storage, path)) {
+        return 0;
+    }
+    if (!zf_storage_read_file(storage, path, (uint8_t *)out, sizeof(*out), &size) ||
+        size != sizeof(*out) || out->magic != ZF_VAULT_MAGIC || out->version != ZF_VAULT_VERSION ||
+        !zf_vault_rounds_valid(out->rounds)) {
+        zf_crypto_secure_zero(out, sizeof(*out));
+        return -1;
+    }
+    return 1;
 }
 
 void zf_vault_reset_runtime(void) {
@@ -207,25 +235,29 @@ void zf_vault_reset_runtime(void) {
 }
 
 bool zf_vault_load(Storage *storage) {
-    ZfVaultFile file;
-    size_t size = 0;
+    ZfVaultFile primary;
+    ZfVaultFile mirror;
+    int p = 0;
+    int m = 0;
 
     zf_vault_reset_runtime();
-    zf_storage_recover_atomic_file(storage, ZF_VAULT_FILE_PATH, ZF_VAULT_FILE_TEMP_PATH);
-    if (!storage_file_exists(storage, ZF_VAULT_FILE_PATH)) {
-        return true;
+    p = zf_vault_read_one(storage, ZF_VAULT_FILE_PATH, ZF_VAULT_FILE_TEMP_PATH, &primary);
+    m = zf_vault_read_one(storage, ZF_VAULT_MIRROR_PATH, ZF_VAULT_MIRROR_TEMP_PATH, &mirror);
+    if (p == 1) {
+        g_vault.file = primary;
+        g_vault.present = true;
+        if (m == 1 && memcmp(&primary, &mirror, sizeof(primary)) != 0) {
+            g_vault.alt = mirror;
+            g_vault.alt_present = true;
+        }
+    } else if (m == 1) {
+        g_vault.file = mirror; /* primary missing or damaged: use the mirror */
+        g_vault.present = true;
+        g_vault.repair_pending = true;
     }
-    if (!zf_storage_read_file(storage, ZF_VAULT_FILE_PATH, (uint8_t *)&file, sizeof(file),
-                              &size) ||
-        size != sizeof(file) || file.magic != ZF_VAULT_MAGIC ||
-        file.version != ZF_VAULT_VERSION || !zf_vault_rounds_valid(file.rounds)) {
-        zf_crypto_secure_zero(&file, sizeof(file));
-        return false;
-    }
-    g_vault.file = file;
-    g_vault.present = true;
-    zf_crypto_secure_zero(&file, sizeof(file));
-    return true;
+    zf_crypto_secure_zero(&primary, sizeof(primary));
+    zf_crypto_secure_zero(&mirror, sizeof(mirror));
+    return g_vault.present || p == 0;
 }
 
 bool zf_vault_is_present(void) {
@@ -241,22 +273,17 @@ void zf_vault_set_progress(ZfVaultProgressFn fn, void *context) {
     g_vault.progress_context = context;
 }
 
-bool zf_vault_unlock(const uint8_t pin_hash[ZF_PIN_HASH_LEN]) {
+static bool zf_vault_open_file(const uint8_t pin_hash[ZF_PIN_HASH_LEN], const ZfVaultFile *file) {
     ZfVaultKeys keys;
     uint8_t mac[32];
     uint8_t pmk[ZF_VAULT_KEY_LEN];
     bool ok = false;
 
-    if (!g_vault.present || !pin_hash) {
-        return false;
-    }
-    if (zf_vault_derive(pin_hash, &g_vault.file, &keys) &&
-        zf_crypto_constant_time_equal(keys.verifier, g_vault.file.verifier,
-                                      ZF_VAULT_VERIFIER_LEN) &&
-        zf_vault_file_mac(keys.mac, &g_vault.file, mac) &&
-        zf_crypto_constant_time_equal(mac, g_vault.file.mac, sizeof(mac)) &&
-        zf_crypto_aes256_cbc_decrypt(keys.wrap, g_vault.file.iv, g_vault.file.pmk_wrapped, pmk,
-                                     sizeof(pmk))) {
+    if (zf_vault_derive(pin_hash, file, &keys) &&
+        zf_crypto_constant_time_equal(keys.verifier, file->verifier, ZF_VAULT_VERIFIER_LEN) &&
+        zf_vault_file_mac(keys.mac, file, mac) &&
+        zf_crypto_constant_time_equal(mac, file->mac, sizeof(mac)) &&
+        zf_crypto_aes256_cbc_decrypt(keys.wrap, file->iv, file->pmk_wrapped, pmk, sizeof(pmk))) {
         memcpy(g_vault.pmk, pmk, sizeof(pmk));
         g_vault.unlocked = true;
         g_vault.unlocked_at = furi_get_tick();
@@ -266,6 +293,35 @@ bool zf_vault_unlock(const uint8_t pin_hash[ZF_PIN_HASH_LEN]) {
     zf_crypto_secure_zero(mac, sizeof(mac));
     zf_crypto_secure_zero(pmk, sizeof(pmk));
     return ok;
+}
+
+bool zf_vault_unlock(const uint8_t pin_hash[ZF_PIN_HASH_LEN]) {
+    if (!g_vault.present || !pin_hash) {
+        return false;
+    }
+    if (zf_vault_open_file(pin_hash, &g_vault.file)) {
+        return true;
+    }
+    /* Primary damaged in place (MAC fails) but the mirror opens: adopt it. */
+    if (g_vault.alt_present && zf_vault_open_file(pin_hash, &g_vault.alt)) {
+        g_vault.file = g_vault.alt;
+        g_vault.alt_present = false;
+        g_vault.repair_pending = true;
+        zf_crypto_secure_zero(&g_vault.alt, sizeof(g_vault.alt));
+        return true;
+    }
+    return false;
+}
+
+bool zf_vault_repair(Storage *storage) {
+    if (!g_vault.present || !storage || !g_vault.repair_pending) {
+        return true;
+    }
+    if (!zf_vault_write(storage, &g_vault.file)) {
+        return false;
+    }
+    g_vault.repair_pending = false;
+    return true;
 }
 
 bool zf_vault_create(Storage *storage, const uint8_t pin_hash[ZF_PIN_HASH_LEN],
@@ -320,6 +376,8 @@ bool zf_vault_get_verifier(uint8_t out[ZF_VAULT_VERIFIER_LEN]) {
 
 bool zf_vault_destroy(Storage *storage) {
     bool ok = zf_storage_remove_atomic_file(storage, ZF_VAULT_FILE_PATH, ZF_VAULT_FILE_TEMP_PATH);
+
+    (void)zf_storage_remove_atomic_file(storage, ZF_VAULT_MIRROR_PATH, ZF_VAULT_MIRROR_TEMP_PATH);
 
     zf_vault_reset_runtime();
     return ok;

@@ -79,7 +79,17 @@ static const ZfLocalAttestationProfile zf_attestation_local_profile = {
 #endif
 
 const uint8_t *zf_attestation_get_aaguid(void) {
+#if ZF_PACKED_ATTESTATION
     return zf_attestation_aaguid;
+#else
+    /*
+     * tpm branch (2026-11-05): without attestation, do not tell sites the
+     * authenticator model either — an all-zero AAGUID, so passkeys of
+     * different accounts carry no shared model marker.
+     */
+    static const uint8_t zf_zero_aaguid[ZF_AAGUID_LEN] = {0};
+    return zf_zero_aaguid;
+#endif
 }
 
 const char *zf_attestation_get_aaguid_string(void) {

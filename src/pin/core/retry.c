@@ -170,6 +170,9 @@ bool zf_pin_check_hash(Storage *storage, ZfClientPinState *state,
 
     if (zf_vault_is_present()) {
         ok = zf_vault_unlock(pin_hash);
+        if (ok) {
+            (void)zf_vault_repair(storage); /* restores the primary after a mirror fallback */
+        }
         if (ok && zf_vault_get_verifier(verifier)) {
             if (!zf_crypto_constant_time_equal(state->pin_hash, verifier, ZF_PIN_HASH_LEN)) {
                 zf_pin_mirror_dirty = true;

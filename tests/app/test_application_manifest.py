@@ -43,7 +43,11 @@ class ManifestProfileTests(unittest.TestCase):
         self.assertIn("ZF_AUTO_ACCEPT_REQUESTS=0", app["cdefines"])
         self.assertIn("ZF_DEV_SCREENSHOT=0", app["cdefines"])
         self.assertIn("ZF_DEV_FIDO2_1=0", app["cdefines"])
-        self.assertIn("ZF_PACKED_ATTESTATION=1", app["cdefines"])
+        # tpm branch (2026-11-05): packed attestation and legacy U2F are off by
+        # default to fit the Momentum heap.
+        self.assertIn("ZF_PACKED_ATTESTATION=0", app["cdefines"])
+        self.assertIn("ZF_U2F_DISABLED=1", app["cdefines"])
+        self.assertIn("!u2f", app["sources"])
         self.assertIn("!nfc_*.c", app["sources"])
         self.assertIn("!nfc_trace.c", app["sources"])
         self.assertIn("!zerofido_usb_diagnostics.c", app["sources"])

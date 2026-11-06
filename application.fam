@@ -22,7 +22,11 @@ usb_diagnostics = env_flag("ZEROFIDO_USB_DIAGNOSTICS", False)
 auto_accept_requests = env_flag("ZEROFIDO_AUTO_ACCEPT_REQUESTS", False)
 dev_screenshot = env_flag("ZEROFIDO_DEV_SCREENSHOT", False)
 dev_fido2_1 = env_flag("ZEROFIDO_DEV_FIDO2_1", False)
-packed_attestation = env_flag("ZEROFIDO_PACKED_ATTESTATION", True)
+# tpm branch (2026-11-05): defaults off to fit the Momentum heap; the owner
+# does not need attestation or legacy U2F inside ZeroFIDO (built-in Flipper U2F
+# stays for SSH). Turn back on with ZEROFIDO_PACKED_ATTESTATION=1 / ZEROFIDO_U2F=1.
+packed_attestation = env_flag("ZEROFIDO_PACKED_ATTESTATION", False)
+u2f_enabled = env_flag("ZEROFIDO_U2F", False)
 
 cdefines = [
     f"ZF_RELEASE_DIAGNOSTICS={1 if release_diagnostics else 0}",
@@ -31,6 +35,7 @@ cdefines = [
     f"ZF_DEV_SCREENSHOT={1 if dev_screenshot else 0}",
     f"ZF_DEV_FIDO2_1={1 if dev_fido2_1 else 0}",
     f"ZF_PACKED_ATTESTATION={1 if packed_attestation else 0}",
+    f"ZF_U2F_DISABLED={0 if u2f_enabled else 1}",
 ]
 sources = [
     "*.c",
@@ -84,6 +89,9 @@ elif profile == "nfc":
 else:
     requires.append("nfc")
     description = "FIDO2 for Flipper Zero"
+
+if not u2f_enabled:
+    sources.append("!u2f")
 
 if not release_diagnostics:
     sources.append("!nfc_trace.c")

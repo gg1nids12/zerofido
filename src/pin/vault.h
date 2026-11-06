@@ -25,6 +25,9 @@
 
 #define ZF_VAULT_FILE_PATH ZF_APP_DATA_DIR "/vault.bin"
 #define ZF_VAULT_FILE_TEMP_PATH ZF_APP_DATA_DIR "/vault.tmp"
+/* Second copy: one damaged file must not lose every PIN-bound passkey. */
+#define ZF_VAULT_MIRROR_PATH ZF_APP_DATA_DIR "/vault.mirror"
+#define ZF_VAULT_MIRROR_TEMP_PATH ZF_APP_DATA_DIR "/vault.mirror.tmp"
 #define ZF_VAULT_KEY_LEN 32U
 #define ZF_VAULT_SALT_LEN 16U
 #define ZF_VAULT_VERIFIER_LEN ZF_PIN_HASH_LEN
@@ -58,6 +61,9 @@ bool zf_vault_rewrap(Storage *storage, const uint8_t new_pin_hash[ZF_PIN_HASH_LE
                      uint8_t verifier_out[ZF_VAULT_VERIFIER_LEN]);
 
 bool zf_vault_get_verifier(uint8_t out[ZF_VAULT_VERIFIER_LEN]);
+
+/* After a mirror fallback, rewrites both copies from the copy in use; else no-op. */
+bool zf_vault_repair(Storage *storage);
 
 /* Deletes vault.bin and wipes RAM state. */
 bool zf_vault_destroy(Storage *storage);

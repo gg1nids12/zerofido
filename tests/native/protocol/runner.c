@@ -140,7 +140,7 @@ typedef struct {
     size_t size;
     bool exists;
 } TestStorageFile;
-static TestStorageFile g_storage_files[8];
+static TestStorageFile g_storage_files[16]; /* tpm branch: vault + mirror need more slots */
 static const char *k_repeated_credential_file_name =
     "1010101010101010101010101010101010101010101010101010101010101010";
 

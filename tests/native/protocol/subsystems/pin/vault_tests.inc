@@ -89,6 +89,10 @@ static void test_vault_rejects_tampered_file(void) {
     expect(zf_storage_write_file_atomic(&storage, ZF_VAULT_FILE_PATH, ZF_VAULT_FILE_TEMP_PATH, blob,
                                         size),
            "write tampered vault");
+    /* both copies damaged: the mirror cannot help */
+    expect(zf_storage_write_file_atomic(&storage, ZF_VAULT_MIRROR_PATH, ZF_VAULT_MIRROR_TEMP_PATH,
+                                        blob, size),
+           "write tampered mirror");
     zf_vault_reset_runtime();
     expect(zf_vault_load(&storage), "tampered vault still parses");
     expect(!zf_vault_unlock(pin), "tampered vault must not open");
@@ -97,6 +101,9 @@ static void test_vault_rejects_tampered_file(void) {
     expect(zf_storage_write_file_atomic(&storage, ZF_VAULT_FILE_PATH, ZF_VAULT_FILE_TEMP_PATH, blob,
                                         size),
            "write malformed vault");
+    expect(zf_storage_write_file_atomic(&storage, ZF_VAULT_MIRROR_PATH, ZF_VAULT_MIRROR_TEMP_PATH,
+                                        blob, size),
+           "write malformed mirror");
     zf_vault_reset_runtime();
     expect(!zf_vault_load(&storage), "malformed vault is reported");
 }
@@ -214,7 +221,55 @@ static void test_vault_stretch_sends_keepalives(void) {
     expect(g_processing_keepalive_count == 0, "no keepalive outside a PIN command");
 }
 
+
+static void test_vault_mirror_survives_damaged_primary(void) {
+    Storage storage = {0};
+    uint8_t pin[ZF_PIN_HASH_LEN];
+    uint8_t verifier[ZF_VAULT_VERIFIER_LEN];
+    uint8_t key_a[ZF_VAULT_KEY_LEN];
+    uint8_t key_b[ZF_VAULT_KEY_LEN];
+    uint8_t blob[200];
+    uint8_t mirror[200];
+    size_t size = 0;
+    size_t msize = 0;
+    static const uint8_t cred_id[2] = {5, 6};
+
+    test_storage_reset();
+    test_vault_hash("mirror test pin", pin);
+    expect(zf_vault_create(&storage, pin, verifier), "vault create for mirror");
+    expect(zf_vault_record_key(cred_id, sizeof(cred_id), key_a), "record key before damage");
+    expect(storage_file_exists(&storage, ZF_VAULT_MIRROR_PATH), "mirror copy written");
+
+    /* damage the primary inside pmk_wrapped: format stays valid, MAC fails */
+    expect(zf_storage_read_file(&storage, ZF_VAULT_FILE_PATH, blob, sizeof(blob), &size),
+           "read primary");
+    blob[size - 40U] ^= 0x01U;
+    expect(zf_storage_write_file_atomic(&storage, ZF_VAULT_FILE_PATH, ZF_VAULT_FILE_TEMP_PATH, blob,
+                                        size),
+           "write damaged primary");
+    zf_vault_reset_runtime();
+    expect(zf_vault_load(&storage), "load with damaged primary");
+    expect(zf_vault_unlock(pin), "mirror opens when the primary is damaged");
+    expect(zf_vault_record_key(cred_id, sizeof(cred_id), key_b) &&
+               memcmp(key_a, key_b, sizeof(key_a)) == 0,
+           "same master key from the mirror");
+    expect(zf_vault_repair(&storage), "repair after mirror fallback");
+    expect(zf_storage_read_file(&storage, ZF_VAULT_FILE_PATH, blob, sizeof(blob), &size) &&
+               zf_storage_read_file(&storage, ZF_VAULT_MIRROR_PATH, mirror, sizeof(mirror), &msize) &&
+               size == msize && memcmp(blob, mirror, size) == 0,
+           "primary restored from the mirror");
+
+    /* primary file lost entirely */
+    expect(storage_common_remove(&storage, ZF_VAULT_FILE_PATH) == FSE_OK, "remove primary");
+    zf_vault_reset_runtime();
+    expect(zf_vault_load(&storage) && zf_vault_is_present(), "vault present from the mirror");
+    expect(zf_vault_unlock(pin), "mirror opens when the primary is gone");
+    expect(zf_vault_repair(&storage) && storage_file_exists(&storage, ZF_VAULT_FILE_PATH),
+           "primary recreated");
+}
+
 static void run_vault_tests(void) {
+    test_vault_mirror_survives_damaged_primary();
     test_vault_stretch_sends_keepalives();
     test_vault_create_unlock_and_wrong_pin();
     test_vault_survives_reload_and_rewrap_keeps_pmk();

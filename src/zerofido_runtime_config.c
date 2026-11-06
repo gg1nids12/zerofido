@@ -110,7 +110,11 @@ void zf_runtime_config_load_defaults(ZfRuntimeConfig *config) {
     config->transport_mode = zf_runtime_config_default_transport_mode();
     config->fido2_enabled = true;
     config->fido2_profile = ZfFido2ProfileCurrent;
+#if defined(ZF_U2F_DISABLED) && ZF_U2F_DISABLED
+    config->u2f_enabled = false; /* tpm branch: U2F module not built */
+#else
     config->u2f_enabled = true;
+#endif
     config->u2f_profile = ZfU2fProfileCurrent;
     config->auto_accept_requests = false;
     config->attestation_mode = ZfAttestationModeNone;

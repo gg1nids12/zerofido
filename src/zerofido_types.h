@@ -82,7 +82,9 @@
 #define ZF_HMAC_SECRET_ENC_MAX_LEN (ZF_HMAC_SECRET_SALT_MAX_LEN + ZF_PIN_PROTOCOL2_IV_LEN)
 #define ZF_HMAC_SECRET_AUTH_MAX_LEN 32
 #define ZF_HMAC_SECRET_OUTPUT_MAX_LEN (64 + ZF_PIN_PROTOCOL2_IV_LEN)
-#define ZF_MAX_CREDENTIALS 32
+/* tpm branch (2026-11-05): 64 (was 32). The index grows with the real count
+ * (~90 bytes per passkey in RAM); records live on the SD card. */
+#define ZF_MAX_CREDENTIALS 64
 #define ZF_STORE_FORMAT_VERSION 1U
 #define ZF_MAX_RP_ID_LEN 256
 #define ZF_MAX_USER_ID_LEN 64
