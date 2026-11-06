@@ -29,6 +29,9 @@ packed_attestation = env_flag("ZEROFIDO_PACKED_ATTESTATION", False)
 u2f_enabled = env_flag("ZEROFIDO_U2F", False)
 # tpm branch (2026-11-05): Bluetooth LE FIDO (Windows) in the universal build.
 ble_enabled = env_flag("ZEROFIDO_BLE", True) and profile == "full"
+# tpm branch (2026-11-06): lab build for NFC debugging — stays in NFC with the
+# cable plugged in, so the NFC trace can be read live over USB serial.
+nfc_lab = env_flag("ZEROFIDO_NFC_LAB", False)
 
 cdefines = [
     f"ZF_RELEASE_DIAGNOSTICS={1 if release_diagnostics else 0}",
@@ -39,6 +42,7 @@ cdefines = [
     f"ZF_PACKED_ATTESTATION={1 if packed_attestation else 0}",
     f"ZF_U2F_DISABLED={0 if u2f_enabled else 1}",
     f"ZF_BLE_ENABLED={1 if ble_enabled else 0}",
+    f"ZF_NFC_LAB={1 if nfc_lab else 0}",
 ]
 sources = [
     "*.c",

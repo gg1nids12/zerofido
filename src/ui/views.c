@@ -1710,6 +1710,9 @@ static void zerofido_auto_transport_tick(ZerofidoApp *app) {
     }
     last_check = now;
     cable = furi_hal_power_get_usb_voltage() > 4.0f;
+#if defined(ZF_NFC_LAB) && ZF_NFC_LAB
+    cable = false; /* lab build: NFC even on the cable, trace over USB serial */
+#endif
     if (cable != last_cable) {
         last_cable = cable;
         stable = 0;
