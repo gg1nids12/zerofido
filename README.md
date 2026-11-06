@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> **Moved to [gg1nids12/zerofido-tpm](https://github.com/gg1nids12/zerofido-tpm)** — same project
+> with the full history and the latest releases. This fork is archived.
+>
+> **Проект переехал в [gg1nids12/zerofido-tpm](https://github.com/gg1nids12/zerofido-tpm)** — та же
+> история и новые релизы. Этот форк в архиве.
+
 > [!WARNING]
 > **Development fork — work in progress.** This is the `tpm` branch of
 > [gg1nids12/zerofido](https://github.com/gg1nids12/zerofido), a modified version of
