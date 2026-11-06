@@ -1,14 +1,155 @@
 > [!WARNING]
-> **Work in progress — a development fork of [ZeroFIDO](https://github.com/MinorGlitch/zerofido)
-> by Alex Stoyanov (MinorGlitch).** This `tpm` branch reworks ZeroFIDO toward TPM-like key
-> protection on Flipper Zero: credential keys bound to the PIN, no stored PIN verifier, and a slow,
-> device-bound PIN check. It is not ready. Do not use it for real accounts.
-> Plan: [docs/TPM_HARDENING.md](docs/TPM_HARDENING.md). Changes against upstream:
-> [CHANGES-TPM.md](CHANGES-TPM.md). License (GPL-3.0-or-later) and authorship are preserved.
+> **Development fork — work in progress.** This is the `tpm` branch of
+> [gg1nids12/zerofido](https://github.com/gg1nids12/zerofido), a modified version of
+> [ZeroFIDO](https://github.com/MinorGlitch/zerofido) by Alex Stoyanov (MinorGlitch).
+> It is tested on one Flipper Zero with Momentum firmware `mntm-012`. Keep backup sign-in
+> methods on every account. License (GPL-3.0-or-later) and authorship of the original are
+> preserved; every change is listed in [CHANGES-TPM.md](CHANGES-TPM.md).
 >
-> **В разработке — доработка ZeroFIDO.** Ветка `tpm` переделывает защиту ключей ближе к уровню
-> TPM: ключи под PIN, без хранения отпечатка PIN, медленная проверка PIN только на этом Флиппере.
-> Не готово, не использовать для настоящих аккаунтов.
+> **Версия в разработке — доработка ZeroFIDO.** Проверена на одном Flipper Zero с прошивкой
+> Momentum `mntm-012`. Оставляйте на аккаунтах запасной способ входа.
+
+## This fork (`tpm` branch) in short
+
+| | Upstream ZeroFIDO 0.8 | This fork |
+|---|---|---|
+| Transports | USB HID, NFC | **USB HID + Bluetooth LE (Windows)**, chosen automatically; NFC off by default |
+| PIN check | PIN hash stored on the SD card | **No PIN hash stored.** Slow check (~1 s) through the Flipper's device-unique AES key |
+| Passkeys created with a PIN | Wrapped with the device key | **Also bound to the PIN** (per-passkey key from a PIN-protected master key) |
+| PIN retries | Counted after the check | **Counted before the check** (a power cut cannot hide a wrong guess) |
+| Legacy U2F inside the app, packed attestation | On | Off by default (build flags) — the Flipper's built-in U2F app is separate |
+| AAGUID | ZeroFIDO model id | All zero (sites see no model marker) |
+| Screens | Dialog with Approve/Deny | U2F-like: **OK approves**, Left/Back deny, vibration + blue light when OK is needed |
+
+How it picks the transport: **cable to a PC → USB key; no cable → Bluetooth.** A request
+that arrives over Bluetooth takes over at once (unless a PC is busy with the USB key) and
+the app returns to the cable rule after 10 s without Bluetooth traffic.
+
+More: [docs/BLUETOOTH.md](docs/BLUETOOTH.md) (Bluetooth transport),
+[docs/TPM_HARDENING.md](docs/TPM_HARDENING.md) (PIN vault and key protection),
+[CHANGES-TPM.md](CHANGES-TPM.md) (all changes).
+
+## Installation
+
+### Requirements
+
+- Flipper Zero with **Momentum firmware `mntm-012`** (FAP API 87.x). Other firmware needs a
+  build against its own SDK (see *Build it yourself*); only Momentum `mntm-012` is tested.
+- microSD card in the Flipper.
+- For Bluetooth: a **Windows 10/11** PC with Bluetooth. Android and iPhone browsers do not use
+  Bluetooth security keys; use the USB cable there.
+
+### Install the app
+
+1. Download `zerofido.fap` from the latest
+   [pre-release](https://github.com/gg1nids12/zerofido/releases) of this fork.
+2. Copy it to the Flipper's SD card as `apps/USB/zerofido.fap` — with qFlipper (*File
+   manager → SD Card → apps → USB*), the Flipper mobile app, or a card reader.
+3. On the Flipper: *Apps → USB → ZeroFIDO*. In Momentum you can also put it on the main menu
+   (Momentum settings → Interface → Main menu).
+
+### First run
+
+1. Open ZeroFIDO. With the cable in a PC the screen says *Connect to a device* (USB key);
+   without a cable it says *Bluetooth ready*.
+2. Optional but recommended: set a PIN. With the cable in, use Windows *Settings → Accounts →
+   Sign-in options → Security key → Manage*, or the app menu (Right → Menu → PIN). Prefer a long
+   PIN (8+ characters, letters allowed) — see *Security notes*.
+
+### Pair with Windows over Bluetooth (once)
+
+1. Open ZeroFIDO on the Flipper, no cable.
+2. On the PC: *Settings → Bluetooth & devices → Add device → Bluetooth → **FIDO &lt;your
+   Flipper's name&gt;***.
+3. The PC and the Flipper show the same 6-digit code. Press **OK** on the Flipper and
+   **Connect** on the PC. Only confirm codes when you are pairing your own PC.
+
+### Use it
+
+On a site that supports passkeys or security keys, choose *security key*. Enter the PIN on the
+PC if asked. The Flipper vibrates and blinks blue — press **OK**. Test sites:
+[webauthn.io](https://webauthn.io), [passkeys.io](https://www.passkeys.io).
+
+When you leave ZeroFIDO, the Flipper's normal Bluetooth (mobile app) comes back.
+
+### Build it yourself
+
+```sh
+# ufbt with the SDK that matches your firmware, e.g. Momentum mntm-012:
+ufbt update --index-url=https://up.momentum-fw.dev/firmware/directory.json --channel=release
+ZEROFIDO_PROFILE=full ufbt          # dist/zerofido.fap
+```
+
+Build flags of this fork (environment variables, `1`/`0`):
+
+| Flag | Default | Effect |
+|---|---|---|
+| `ZEROFIDO_BLE` | `1` | Bluetooth LE FIDO transport (full profile) |
+| `ZEROFIDO_NFC` | `0` | NFC transport in the full profile (the `nfc` profile always has it) |
+| `ZEROFIDO_U2F` | `0` | Legacy U2F (CTAP1) inside ZeroFIDO |
+| `ZEROFIDO_PACKED_ATTESTATION` | `0` | Packed attestation and the ZeroFIDO AAGUID |
+| `ZEROFIDO_TRACE` | `1` | Service trace: command/status codes and timings only |
+| `ZEROFIDO_NFC_XLOG` | `1` | Light NFC exchange log (APDU headers and status words), when NFC is on |
+| `ZEROFIDO_NFC_LAB` | `0` | Lab build: stays in NFC with the cable in (for NFC debugging) |
+
+### Your data
+
+Passkeys and the PIN vault live in `/ext/apps_data/zerofido/` on the SD card, encrypted with the
+Flipper's device-unique key: a copy of that folder works only on the same Flipper. Back it up
+before updates. Removing the app: delete `apps/USB/zerofido.fap` (and the data folder to wipe
+the passkeys).
+
+## Security notes
+
+- The Flipper Zero has **no secure element and no secure boot**. Anyone holding the Flipper can
+  run their own firmware, use the device key and try PINs outside the retry counter, about one
+  per second (the PIN check is deliberately slow). A 4-digit PIN falls in hours, a 6-digit one
+  in days; a long PIN with letters is the real protection. A stolen SD card alone is useless.
+- The retry counter is stored on the SD card; someone with the Flipper and its card can roll it
+  back by restoring old files.
+- Bluetooth: pairing needs the 6-digit code confirmed with OK on the Flipper; FIDO requests are
+  accepted only from a paired, encrypted and authenticated link. Every sign-in still needs OK on
+  the Flipper (and the PIN when the site asks for it).
+- The approval screen shows the end of long site names (where the real domain is) and ignores
+  OK for 0.4 s after a request appears, so an OK meant for something else does not approve it.
+- Leaving the app wipes the PIN-derived key from memory; it also expires 32 s after the last PIN
+  use.
+
+## Установка (по-русски)
+
+**Что нужно:** Flipper Zero с прошивкой **Momentum `mntm-012`**, карта microSD; для Bluetooth —
+компьютер с **Windows 10/11** и Bluetooth (Android и iPhone ключи по Bluetooth не используют —
+там кабель).
+
+1. Скачайте `zerofido.fap` из последнего
+   [pre-release](https://github.com/gg1nids12/zerofido/releases).
+2. Скопируйте на карту Флиппера как `apps/USB/zerofido.fap` (qFlipper → *File manager → SD Card
+   → apps → USB*, мобильное приложение Flipper или картридер).
+3. На Флиппере: *Apps → USB → ZeroFIDO*. В Momentum можно вынести в главное меню (настройки
+   Momentum → Interface → Main menu).
+4. Кабель в компьютере — работает как USB-ключ; без кабеля — по Bluetooth.
+5. PIN по желанию (рекомендуется, длинный — 8+ символов, можно с буквами): с кабелем в Windows
+   *Параметры → Учётные записи → Варианты входа → Ключ безопасности → Управление*, или в меню
+   приложения (вправо → Menu → PIN).
+6. **Спаривание с Windows по Bluetooth (один раз):** ZeroFIDO открыт, кабель отключён → на ПК
+   *Параметры → Bluetooth и устройства → Добавить устройство → Bluetooth → FIDO &lt;имя
+   Флиппера&gt;* → на ПК и на Флиппере один и тот же код из 6 цифр → **OK** на Флиппере и
+   **Подключить** на ПК. Подтверждайте код, только когда спариваете свой компьютер.
+7. **Вход:** на сайте выберите «ключ безопасности», при запросе введите PIN на ПК; Флиппер
+   вибрирует и мигает синим — нажмите **OK**. Проверка: [webauthn.io](https://webauthn.io).
+8. При выходе из ZeroFIDO обычный Bluetooth Флиппера (мобильное приложение) возвращается.
+
+**Данные:** passkey и хранилище PIN — в `/ext/apps_data/zerofido/`, зашифрованы ключом этого
+Флиппера (копия папки работает только на нём же). Делайте копию перед обновлениями.
+**Безопасность:** у Флиппера нет защищённого чипа — с Флиппером в руках PIN можно перебирать
+(~1 попытка в секунду), поэтому главная защита — длинный PIN.
+
+---
+
+# Upstream README (ZeroFIDO 0.8)
+
+The text below is the original ZeroFIDO README. Where it differs from the fork (transports,
+U2F, attestation), the tables above apply.
 
 ![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 ![Platform: Flipper Zero](https://img.shields.io/badge/platform-Flipper%20Zero-orange)

@@ -39,6 +39,10 @@ nfc_enabled = profile == "nfc" or (profile == "full" and env_flag("ZEROFIDO_NFC"
 # tpm branch (2026-11-06): light NFC exchange log (headers and status words
 # only) into the service trace; fits the heap, unlike the full diagnostics.
 nfc_xlog = env_flag("ZEROFIDO_NFC_XLOG", True) and nfc_enabled
+# tpm branch (2026-11-06): service trace (/ext/apps_data/zerofido/trace.txt):
+# command codes, status codes and timings only. On while the branch is in
+# development; ZEROFIDO_TRACE=0 turns it off.
+tpm_trace = env_flag("ZEROFIDO_TRACE", True)
 
 cdefines = [
     f"ZF_RELEASE_DIAGNOSTICS={1 if release_diagnostics else 0}",
@@ -52,6 +56,7 @@ cdefines = [
     f"ZF_NFC_LAB={1 if nfc_lab else 0}",
     f"ZF_NFC_XLOG={1 if nfc_xlog else 0}",
     f"ZF_NFC_ENABLED={1 if nfc_enabled else 0}",
+    f"ZF_TPM_TRACE={1 if tpm_trace else 0}",
 ]
 sources = [
     "*.c",

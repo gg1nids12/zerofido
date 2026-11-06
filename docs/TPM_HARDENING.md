@@ -1,10 +1,35 @@
 # TPM-like hardening for ZeroFIDO (work in progress)
 
-Status: stage 1 implemented and tested on a device (see `CHANGES-TPM.md`). Still work in
-progress — not for real accounts yet. Base: upstream ZeroFIDO v0.8.0 (commit `358ef94`).
+Status: see *Status (2026-11-06)* below and `CHANGES-TPM.md`. Still a development
+version — keep backup sign-in methods. Base: upstream ZeroFIDO v0.8.0 (commit `358ef94`).
 
 The PIN is optional. Without a PIN ZeroFIDO behaves as upstream (press OK on the Flipper).
 The protection below applies when a PIN is set.
+
+## Status (2026-11-06)
+
+Implemented and tested on a device: the PIN vault (F1), PIN-bound discoverable credentials
+and hmac-secret (F2, F3), PIN removal that unbinds first (F8), USB keepalive during long work
+(F10), 64 credentials (F6). Added after the review: the retry is stored before the check, a
+stale vault mirror can no longer revive an old PIN, the stretch count is capped, the PMK
+lifetime covers the OK wait, safer approval screen.
+
+Different from the plan below:
+
+- The PIN stays optional and discoverable credentials can be created without one (F5 is not
+  enforced) — the owner wants "plug in, press OK" to work without a PIN.
+- Minimum PIN length is the CTAP minimum (4); a longer device minimum made Windows loop.
+- Names stay in clear on the SD card (F7 not done).
+- NFC is off by default (F9 moot for now); Bluetooth LE for Windows was added instead
+  ([BLUETOOTH.md](BLUETOOTH.md)).
+
+Limits that software on this hardware cannot remove:
+
+- No secure element, no secure boot: with the Flipper in hand, custom firmware can use the
+  device key and try PINs at about one per second outside the retry counter. The PIN length is
+  the real protection. A stolen SD card alone is useless.
+- The retry counter lives on the SD card and can be rolled back together with the PIN state
+  (F4).
 
 ## Goal
 
