@@ -20,6 +20,9 @@
 #include <string.h>
 
 #include "../transport/adapter.h"
+#if ZF_BLE_ENABLED && !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
+#include "../transport/ble_link.h"
+#endif
 #if defined(ZF_USB_ONLY)
 #include "../transport/usb_hid_worker.h"
 #elif defined(ZF_NFC_ONLY)
@@ -167,6 +170,10 @@ static const ZfTransportAdapterOps *zf_app_lifecycle_adapter_for_mode(ZfTranspor
     switch (mode) {
     case ZfTransportModeNfc:
         return &zf_transport_nfc_adapter;
+#if ZF_BLE_ENABLED
+    case ZfTransportModeBle:
+        return &zf_transport_ble_adapter;
+#endif
     case ZfTransportModeUsbHid:
     default:
         return &zf_transport_usb_hid_adapter;
@@ -327,6 +334,17 @@ bool zf_app_lifecycle_startup(ZerofidoApp *app) {
         zerofido_ui_set_status(app, NULL);
     }
 
+#if ZF_BLE_ENABLED && !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
+    /*
+     * tpm branch (2026-11-05): Bluetooth LE FIDO for Windows. The profile stays
+     * up for the whole session; a BLE request switches the active transport.
+     */
+    if (!backend_status && !app->ble_link) {
+        zerofido_ui_set_status(app, "Bluetooth");
+        app->ble_link = zf_ble_link_start();
+        zerofido_ui_set_status(app, NULL);
+    }
+#endif
     zerofido_ui_refresh_status_line(app);
     zerofido_ui_refresh_credentials_status(app);
     zf_telemetry_log("startup end");
@@ -483,7 +501,8 @@ bool zf_app_lifecycle_switch_transport_runtime(ZerofidoApp *app, ZfTransportMode
     ZfRuntimeConfig previous_config;
     ZfRuntimeConfig next_config;
 
-    if (!app || (mode != ZfTransportModeUsbHid && mode != ZfTransportModeNfc)) {
+    if (!app || (mode != ZfTransportModeUsbHid && mode != ZfTransportModeNfc &&
+                 !(ZF_BLE_ENABLED && mode == ZfTransportModeBle && app->ble_link))) {
         return false;
     }
     previous_config = app->runtime_config;
@@ -549,6 +568,11 @@ void zf_app_lifecycle_shutdown(ZerofidoApp *app) {
     furi_mutex_release(app->ui_mutex);
     zf_app_lifecycle_wait_startup(app);
     zf_app_lifecycle_stop_worker(app);
+#if ZF_BLE_ENABLED && !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
+    /* Back to the default Flipper Bluetooth before the app code unloads. */
+    zf_ble_link_stop(app->ble_link);
+    app->ble_link = NULL;
+#endif
     zf_vault_reset_runtime(); /* tpm branch: no PMK survives app exit */
 }
 

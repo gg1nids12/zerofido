@@ -50,6 +50,9 @@ extern const ZfTransportAdapterOps zf_transport_usb_hid_adapter;
 #if !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
 extern const ZfTransportAdapterOps zf_transport_nfc_adapter;
 #endif
+#if ZF_BLE_ENABLED && !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
+extern const ZfTransportAdapterOps zf_transport_ble_adapter;
+#endif
 
 void zf_transport_stop(ZerofidoApp *app);
 void zf_transport_send_dispatch_result(ZerofidoApp *app, const ZfProtocolDispatchRequest *request,

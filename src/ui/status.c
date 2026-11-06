@@ -49,6 +49,7 @@ typedef struct {
     ZfHomeStatus status;
     ZfTransportMode transport_mode;
     bool show_list; /* tpm branch: passkey list (Down) instead of the U2F-like screen */
+    bool ble_ready; /* tpm branch: Bluetooth FIDO is up */
     size_t item_count;
     size_t selected_item;
     size_t visible_start;
@@ -85,7 +86,7 @@ static const char *zf_home_status_label(ZfHomeStatus status) {
 }
 
 static const char *zf_home_transport_title_label(ZfTransportMode mode) {
-    return mode == ZfTransportModeNfc ? "NFC" : "USB";
+    return mode == ZfTransportModeNfc ? "NFC" : mode == ZfTransportModeBle ? "BT" : "USB";
 }
 
 static bool zf_status_format_record_item(ZfCredentialRecord *record, char *title, size_t title_size,
@@ -124,6 +125,7 @@ static bool zf_status_refresh_model(ZerofidoApp *app, bool redraw, bool reload_c
     memset(entries, 0, sizeof(entries));
     furi_mutex_acquire(app->ui_mutex, FuriWaitForever);
     snapshot.transport_mode = app->runtime_config.transport_mode;
+    snapshot.ble_ready = app->ble_link != NULL;
     if (zf_status_text_is_error(app->status_text)) {
         snapshot.status = ZfHomeStatusError;
     } else if (app->approval.state == ZfApprovalPending || app->status_text[0] != '\0' ||
@@ -141,6 +143,7 @@ static bool zf_status_refresh_model(ZerofidoApp *app, bool redraw, bool reload_c
             {
                 model->status = snapshot.status;
                 model->transport_mode = snapshot.transport_mode;
+                model->ble_ready = snapshot.ble_ready;
             },
             redraw);
         return true;
@@ -260,7 +263,11 @@ static void zf_status_draw_callback(Canvas *canvas, void *model) {
 
         if (status->transport_mode == ZfTransportModeNfc) {
             icon = &I_Connected_62x31;
-            text = "Tap phone / plug USB";
+            text = status->ble_ready ? "Tap phone, USB or BT" : "Tap phone / plug USB";
+        } else if (status->transport_mode == ZfTransportModeBle) {
+            icon = &I_Connected_62x31;
+            text = status->status == ZfHomeStatusConnected ? "Bluetooth connected" :
+                                                             "Bluetooth";
         } else if (status->status == ZfHomeStatusConnected) {
             icon = &I_Connected_62x31;
             text = "Connected!";

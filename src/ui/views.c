@@ -35,6 +35,9 @@
 #include "../zerofido_ui_i.h"
 #include "status.h"
 #include "../app/lifecycle.h"
+#if ZF_BLE_ENABLED && !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
+#include "../transport/ble_link.h"
+#endif
 
 #if !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
 #define ZF_HAS_TRANSPORT_SETTING 1
@@ -1653,6 +1656,55 @@ static void zerofido_auto_transport_tick(ZerofidoApp *app) {
     bool busy = false;
     ZfTransportMode want;
 
+#if ZF_BLE_ENABLED
+    /*
+     * tpm branch (2026-11-05): a request over Bluetooth takes over at once (the
+     * link keeps it until the BLE worker runs); after 10 s without BLE traffic
+     * the cable rule below picks USB or NFC again.
+     */
+    static uint32_t ble_retry_at = 0;
+    ZfBleLink *link = app->ble_link;
+    if (link) {
+        static uint32_t diag_generation = 0;
+        ZfBleLinkDiag diag;
+
+        zf_ble_link_get_diag(link, &diag);
+        if (diag.generation != diag_generation) {
+            diag_generation = diag.generation;
+            ZF_TRACE(app->storage,
+                     "BLE link conn=%u up=%d enc=%02X pair=%02X/%02X mtu=%u notify=%u rev=%02X "
+                     "writes=%u disc=%02X",
+                     diag.connects, zf_ble_link_is_connected(link) ? 1 : 0, diag.encrypted,
+                     diag.pairing_status, diag.pairing_reason, diag.mtu, diag.notify_on,
+                     diag.revision, diag.writes, diag.disconnect_reason);
+        }
+        bool ble_work = zf_ble_link_has_work(link);
+        bool ble_recent = zf_ble_link_is_connected(link) &&
+                          (uint32_t)(now - zf_ble_link_last_activity(link)) < 10000U;
+        ZfTransportMode mode;
+
+        furi_mutex_acquire(app->ui_mutex, FuriWaitForever);
+        mode = app->runtime_config.transport_mode;
+        busy = app->approval.state == ZfApprovalPending || app->maintenance_busy ||
+               !app->startup_complete;
+        furi_mutex_release(app->ui_mutex);
+        if (mode == ZfTransportModeBle && (ble_work || ble_recent || busy)) {
+            return;
+        }
+        if (mode != ZfTransportModeBle && ble_work && !busy &&
+            (int32_t)(now - ble_retry_at) >= 0) {
+            bool ok = zf_app_lifecycle_switch_transport_runtime(app, ZfTransportModeBle);
+            if (!ok) {
+                ble_retry_at = now + 3000U;
+            }
+            ZF_TRACE(app->storage, "AUTO mode=ble ok=%d free=%u maxblk=%u", ok ? 1 : 0,
+                     (unsigned)memmgr_get_free_heap(), (unsigned)memmgr_heap_get_max_free_block());
+            zerofido_ui_refresh_status(app);
+            return;
+        }
+        busy = false;
+    }
+#endif
     if ((uint32_t)(now - last_check) < 500U) {
         return;
     }

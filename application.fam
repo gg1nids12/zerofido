@@ -27,6 +27,8 @@ dev_fido2_1 = env_flag("ZEROFIDO_DEV_FIDO2_1", False)
 # stays for SSH). Turn back on with ZEROFIDO_PACKED_ATTESTATION=1 / ZEROFIDO_U2F=1.
 packed_attestation = env_flag("ZEROFIDO_PACKED_ATTESTATION", False)
 u2f_enabled = env_flag("ZEROFIDO_U2F", False)
+# tpm branch (2026-11-05): Bluetooth LE FIDO (Windows) in the universal build.
+ble_enabled = env_flag("ZEROFIDO_BLE", True) and profile == "full"
 
 cdefines = [
     f"ZF_RELEASE_DIAGNOSTICS={1 if release_diagnostics else 0}",
@@ -36,6 +38,7 @@ cdefines = [
     f"ZF_DEV_FIDO2_1={1 if dev_fido2_1 else 0}",
     f"ZF_PACKED_ATTESTATION={1 if packed_attestation else 0}",
     f"ZF_U2F_DISABLED={0 if u2f_enabled else 1}",
+    f"ZF_BLE_ENABLED={1 if ble_enabled else 0}",
 ]
 sources = [
     "*.c",
@@ -92,6 +95,10 @@ else:
 
 if not u2f_enabled:
     sources.append("!u2f")
+if ble_enabled:
+    requires.append("bt")
+else:
+    sources.append("!ble_*.c")
 
 if not release_diagnostics:
     sources.append("!nfc_trace.c")

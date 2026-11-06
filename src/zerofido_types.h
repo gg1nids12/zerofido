@@ -26,6 +26,11 @@
 #define ZF_APP_DATA_ROOT "/ext/apps_data"
 #define ZF_APP_DATA_DIR ZF_APP_DATA_ROOT "/" ZF_APP_ID
 
+/* tpm branch: Bluetooth LE transport (set by application.fam). */
+#ifndef ZF_BLE_ENABLED
+#define ZF_BLE_ENABLED 0
+#endif
+
 #ifndef ZF_RELEASE_DIAGNOSTICS
 #define ZF_RELEASE_DIAGNOSTICS 0
 #endif

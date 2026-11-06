@@ -161,6 +161,8 @@ typedef struct ZerofidoApp {
 #if !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
     const ZfTransportAdapterOps *transport_adapter;
 #endif
+    /* tpm branch: Bluetooth LE FIDO link, up while the app runs (NULL if off). */
+    struct ZfBleLink *ble_link;
 #ifndef ZF_NFC_ONLY
     FuriHalUsbInterface *previous_usb;
 #endif

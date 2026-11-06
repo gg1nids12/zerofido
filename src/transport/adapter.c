@@ -24,6 +24,9 @@
 #else
 #include "nfc_worker.h"
 #include "usb_hid_worker.h"
+#if ZF_BLE_ENABLED
+#include "ble_worker.h"
+#endif
 #endif
 #include "../zerofido_app_i.h"
 
@@ -60,6 +63,19 @@ const ZfTransportAdapterOps zf_transport_nfc_adapter = {
     .wait_for_interaction = zf_transport_nfc_wait_for_interaction,
     .notify_interaction_changed = zf_transport_nfc_notify_interaction_changed,
     .poll_cbor_control = zf_transport_nfc_poll_cbor_control,
+};
+#endif
+
+#if ZF_BLE_ENABLED
+/* tpm branch: Bluetooth LE adapter (CTAP over BLE, notifications on fidoStatus). */
+const ZfTransportAdapterOps zf_transport_ble_adapter = {
+    .worker = zf_transport_ble_worker,
+    .worker_stack_size = 6 * 1024,
+    .stop = zf_transport_ble_stop,
+    .send_dispatch_result = zf_transport_ble_send_dispatch_result,
+    .wait_for_interaction = zf_transport_ble_wait_for_interaction,
+    .notify_interaction_changed = zf_transport_ble_notify_interaction_changed,
+    .poll_cbor_control = zf_transport_ble_poll_cbor_control,
 };
 #endif
 
@@ -171,5 +187,10 @@ void zf_transport_processing_keepalive(ZerofidoApp *app, ZfTransportSessionId cu
     if (app && app->transport_adapter == &zf_transport_usb_hid_adapter) {
         zf_transport_usb_hid_processing_keepalive(app, current_session_id);
     }
+#if ZF_BLE_ENABLED
+    if (app && app->transport_adapter == &zf_transport_ble_adapter) {
+        zf_transport_ble_processing_keepalive(app, current_session_id);
+    }
+#endif
 #endif
 }

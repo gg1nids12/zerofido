@@ -28,6 +28,8 @@ typedef struct ZerofidoApp ZerofidoApp;
 typedef enum {
     ZfTransportModeUsbHid = 0,
     ZfTransportModeNfc = 1,
+    /* tpm branch: runtime only (never saved), chosen when a PC talks over BLE. */
+    ZfTransportModeBle = 2,
 } ZfTransportMode;
 
 typedef enum {
