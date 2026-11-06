@@ -9,6 +9,45 @@
 > **Версия в разработке — доработка ZeroFIDO.** Проверена на одном Flipper Zero с прошивкой
 > Momentum `mntm-012`. Оставляйте на аккаунтах запасной способ входа.
 
+## Install in 3 steps
+
+**You need:** a Flipper Zero with [Momentum firmware](https://momentum-fw.dev/update) `mntm-012`.
+
+1. **Download** [zerofido.fap](https://github.com/gg1nids12/zerofido/releases/latest/download/zerofido.fap).
+2. **Copy** it to the Flipper: plug the Flipper into your computer, open
+   [qFlipper](https://flipperzero.one/update) → **File manager** → **SD Card** → `apps` → `USB`
+   and drag `zerofido.fap` into that folder (create `USB` if it is missing).
+3. **Open** it on the Flipper: **Apps → USB → ZeroFIDO**.
+
+Done. With the cable in a computer the Flipper is a USB security key: on a website choose
+*security key*, then press **OK** on the Flipper when it vibrates.
+
+**Without a cable on Windows (Bluetooth), once:** open ZeroFIDO, unplug the cable → on the PC
+**Settings → Bluetooth & devices → Add device → Bluetooth** → choose **FIDO …** → the PC and the
+Flipper show the same 6-digit code → press **OK** on the Flipper and **Connect** on the PC. From
+then on sign-ins work without the cable.
+
+## Установка в 3 шага
+
+**Нужно:** Flipper Zero с прошивкой [Momentum](https://momentum-fw.dev/update) `mntm-012`.
+
+1. **Скачайте** [zerofido.fap](https://github.com/gg1nids12/zerofido/releases/latest/download/zerofido.fap).
+2. **Скопируйте** на Флиппер: подключите его к компьютеру, откройте
+   [qFlipper](https://flipperzero.one/update) → **File manager** → **SD Card** → `apps` → `USB`
+   и перетащите туда `zerofido.fap` (если папки `USB` нет — создайте).
+3. **Откройте** на Флиппере: **Apps → USB → ZeroFIDO**.
+
+Готово. С кабелем в компьютере Флиппер работает как USB-ключ: на сайте выберите
+«ключ безопасности» и нажмите **OK** на Флиппере, когда он завибрирует.
+
+**Без кабеля на Windows (Bluetooth), один раз:** откройте ZeroFIDO, отключите кабель → на ПК
+**Параметры → Bluetooth и устройства → Добавить устройство → Bluetooth** → выберите **FIDO …** →
+на ПК и на Флиппере один и тот же код из 6 цифр → **OK** на Флиппере и **Подключить** на ПК.
+Дальше вход работает без кабеля.
+
+Details, PIN and security notes: [Installation](#installation), [Security notes](#security-notes).
+Подробности, PIN и безопасность: [Установка (по-русски)](#установка-по-русски).
+
 ## This fork (`tpm` branch) in short
 
 | | Upstream ZeroFIDO 0.8 | This fork |
@@ -41,8 +80,8 @@ More: [docs/BLUETOOTH.md](docs/BLUETOOTH.md) (Bluetooth transport),
 
 ### Install the app
 
-1. Download `zerofido.fap` from the latest
-   [pre-release](https://github.com/gg1nids12/zerofido/releases) of this fork.
+1. Download [zerofido.fap](https://github.com/gg1nids12/zerofido/releases/latest/download/zerofido.fap)
+   (all versions: [Releases](https://github.com/gg1nids12/zerofido/releases)).
 2. Copy it to the Flipper's SD card as `apps/USB/zerofido.fap` — with qFlipper (*File
    manager → SD Card → apps → USB*), the Flipper mobile app, or a card reader.
 3. On the Flipper: *Apps → USB → ZeroFIDO*. In Momentum you can also put it on the main menu
@@ -121,8 +160,8 @@ the passkeys).
 компьютер с **Windows 10/11** и Bluetooth (Android и iPhone ключи по Bluetooth не используют —
 там кабель).
 
-1. Скачайте `zerofido.fap` из последнего
-   [pre-release](https://github.com/gg1nids12/zerofido/releases).
+1. Скачайте [zerofido.fap](https://github.com/gg1nids12/zerofido/releases/latest/download/zerofido.fap)
+   (все версии: [Releases](https://github.com/gg1nids12/zerofido/releases)).
 2. Скопируйте на карту Флиппера как `apps/USB/zerofido.fap` (qFlipper → *File manager → SD Card
    → apps → USB*, мобильное приложение Flipper или картридер).
 3. На Флиппере: *Apps → USB → ZeroFIDO*. В Momentum можно вынести в главное меню (настройки
