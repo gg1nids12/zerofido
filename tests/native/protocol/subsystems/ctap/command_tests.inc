@@ -1923,6 +1923,63 @@ static void test_get_assertion_multi_match_experimental_2_1_includes_user_select
     run_get_assertion_multi_match_uses_account_selection(true, true);
 }
 
+/* tpm branch (2026-11-06): with a PIN check the PC shows the account picker. */
+static void test_get_assertion_uv_multi_match_lets_platform_pick(void) {
+    Storage storage = {0};
+    ZerofidoApp app = {0};
+    ZfCredentialIndexEntry app_store_records[ZF_MAX_CREDENTIALS] = {0};
+    app.store.records = app_store_records;
+    FuriMutex ui_mutex = {0};
+    uint8_t request[256];
+    uint8_t response[512];
+    uint8_t next_response[512];
+    uint8_t pin_auth[32];
+    size_t response_len = 0;
+    size_t next_response_len = 0;
+    static const uint8_t client_data_hash[32] = {
+        0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B,
+        0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36,
+        0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40,
+    };
+
+    test_storage_reset();
+    app.storage = &storage;
+    app.ui_mutex = &ui_mutex;
+    app.store.count = 2;
+    seed_assertion_queue_record(&app.store.records[0], 0x11, 4);
+    strcpy(app.store.records[0].user_name, "alice");
+    seed_assertion_queue_record(&app.store.records[1], 0x22, 7);
+    strcpy(app.store.records[1].user_name, "bob");
+    app.pin_state.pin_set = true;
+    memset(app.pin_state.pin_token, 0x5A, sizeof(app.pin_state.pin_token));
+    app.pin_state.pin_token_permissions = ZF_PIN_PERMISSION_MC | ZF_PIN_PERMISSION_GA;
+    mark_pin_token_issued(&app.pin_state);
+    expect(zf_crypto_hmac_sha256(app.pin_state.pin_token, sizeof(app.pin_state.pin_token),
+                                 client_data_hash, sizeof(client_data_hash), pin_auth),
+           "derive getAssertion pinAuth");
+
+    response_len = zerofido_handle_ctap2(
+        &app, 0x01020304, request,
+        encode_get_assertion_ctap_request_with_pin_auth(request, sizeof(request), false, false,
+                                                        true, pin_auth, ZF_PIN_AUTH_LEN, true),
+        response, sizeof(response));
+
+    expect(response_len > 1 && response[0] == ZF_CTAP_SUCCESS,
+           "UV multi-match GetAssertion should succeed");
+    expect(g_selection_request_count == 0, "UV multi-match should not open the Flipper chooser");
+    expect(g_approval_request_count == 1, "UV multi-match should ask for one OK");
+    expect(get_info_has_uint_field(response + 1, response_len - 1, 5, 2),
+           "UV multi-match should report numberOfCredentials for the PC picker");
+    expect(app.assertion_queue.active && app.assertion_queue.count == 2,
+           "UV multi-match should queue the other account");
+
+    next_response_len =
+        zerofido_handle_ctap2(&app, 0x01020304, (const uint8_t[]){ZfCtapeCmdGetNextAssertion}, 1,
+                              next_response, sizeof(next_response));
+    expect(next_response_len > 1 && next_response[0] == ZF_CTAP_SUCCESS,
+           "GetNextAssertion should return the second account");
+}
+
 static void test_get_assertion_up_false_multi_match_reports_count_and_queues_next(void) {
     Storage storage = {0};
     ZerofidoApp app = {0};

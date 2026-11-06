@@ -242,8 +242,16 @@ static uint8_t zf_ctap_finish_assertion(ZerofidoApp *app, ZfTransportSessionId s
         }
         record_index = scratch->matches[0];
     }
-    include_count = request->has_up && !request->up && !zf_ctap_request_uses_allow_list(request) &&
-                    match_count > 1U;
+    /*
+     * tpm branch (2026-11-06): with a PIN check (UV) and several passkeys for
+     * the site, return the first one with numberOfCredentials and queue the
+     * rest for getNextAssertion: Windows shows the account picker, with names,
+     * on the PC screen (the CTAP 2.0 flow for authenticators without a
+     * display). Without UV, names must not leave the device, so the caller
+     * keeps the on-Flipper choice for that case.
+     */
+    include_count = !zf_ctap_request_uses_allow_list(request) && match_count > 1U &&
+                    ((request->has_up && !request->up) || uv_verified);
     seed_assertion_queue = include_count;
 
     memset(&scratch->selected_record, 0, sizeof(scratch->selected_record));
@@ -274,7 +282,9 @@ static uint8_t zf_ctap_finish_assertion(ZerofidoApp *app, ZfTransportSessionId s
  * Assertion handling has three security-relevant paths:
  * - up=false: no touch, no UP flag, queued continuation when multiple
  *   discoverable credentials match.
- * - multiple discoverable credentials without allowList: UI selection chooses one.
+ * - multiple discoverable credentials without allowList: with UV the platform
+ *   picks (numberOfCredentials + getNextAssertion, tpm branch); without UV the
+ *   on-device UI selection chooses one.
  * - normal flow: touch approval, first match returned, optional continuation queue.
  *
  * Credential records are loaded from a snapshot and revalidated before counter
@@ -366,7 +376,8 @@ uint8_t zf_ctap_handle_get_assertion(ZerofidoApp *app, ZfTransportSessionId sess
     match_count = zf_ctap_resolve_assertion_matches_snapshot(app, request, uv_verified, matches);
     ZF_CTAP_GA_DIAG("matches");
 
-    if (!uses_allow_list && match_count > 1) {
+    /* tpm branch (2026-11-06): on-device choice only without a PIN check, see above. */
+    if (!uses_allow_list && match_count > 1 && !uv_verified) {
         ZF_CTAP_GA_DIAG("select");
         uint32_t selected_record_index = 0;
 
