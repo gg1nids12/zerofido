@@ -59,6 +59,7 @@ Details, PIN and security notes: [Installation](#installation), [Security notes]
 | Legacy U2F inside the app, packed attestation | On | Off by default (build flags) — the Flipper's built-in U2F app is separate |
 | AAGUID | ZeroFIDO model id | All zero (sites see no model marker) |
 | Screens | Dialog with Approve/Deny | U2F-like: **OK approves**, Left/Back deny, vibration + blue light when OK is needed |
+| Several passkeys for one site (sign-in without a user name) | Chosen on the Flipper screen | **Chosen on the PC screen** (with a PIN): one OK on the Flipper, Windows lists the accounts |
 
 How it picks the transport: **cable to a PC → USB key; no cable → Bluetooth.** A request
 that arrives over Bluetooth takes over at once (unless a PC is busy with the USB key) and
@@ -106,7 +107,9 @@ More: [docs/BLUETOOTH.md](docs/BLUETOOTH.md) (Bluetooth transport),
 ### Use it
 
 On a site that supports passkeys or security keys, choose *security key*. Enter the PIN on the
-PC if asked. The Flipper vibrates and blinks blue — press **OK**. Test sites:
+PC if asked. The Flipper vibrates and blinks blue — press **OK**. If you have several accounts on
+the site and sign in without typing a user name, Windows then shows the list of accounts on the
+PC screen (this needs a PIN; without one the choice stays on the Flipper). Test sites:
 [webauthn.io](https://webauthn.io), [passkeys.io](https://www.passkeys.io).
 
 When you leave ZeroFIDO, the Flipper's normal Bluetooth (mobile app) comes back.
@@ -175,7 +178,9 @@ the passkeys).
    Флиппера&gt;* → на ПК и на Флиппере один и тот же код из 6 цифр → **OK** на Флиппере и
    **Подключить** на ПК. Подтверждайте код, только когда спариваете свой компьютер.
 7. **Вход:** на сайте выберите «ключ безопасности», при запросе введите PIN на ПК; Флиппер
-   вибрирует и мигает синим — нажмите **OK**. Проверка: [webauthn.io](https://webauthn.io).
+   вибрирует и мигает синим — нажмите **OK**. Если аккаунтов на сайте несколько и вы входите
+   без имени, список аккаунтов покажет Windows на экране ПК (нужен PIN; без PIN выбор — на
+   Флиппере). Проверка: [webauthn.io](https://webauthn.io).
 8. При выходе из ZeroFIDO обычный Bluetooth Флиппера (мобильное приложение) возвращается.
 
 **Данные:** passkey и хранилище PIN — в `/ext/apps_data/zerofido/`, зашифрованы ключом этого

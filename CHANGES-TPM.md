@@ -159,3 +159,20 @@ The PIN stays optional. Without a PIN everything works as upstream.
   `host_tools/ble_ctap_test.py` passes; USB getInfo after every install.
 - NFC with Android: the phone never selected the FIDO applet in two attempts (only Android's
   own NDEF probing); NFC is off by default since then.
+
+## 2026-11-06 — account choice on the PC screen
+
+- `6df168d` `src/ctap/commands/get_assertion.c`: with a PIN check (UV) and several discoverable
+  credentials for the site (no allowList), getAssertion asks for one OK, returns the first
+  credential with numberOfCredentials and queues the rest for getNextAssertion — Windows shows
+  the account picker, with names, on the PC screen (CTAP 2.0 flow for authenticators without a
+  display). Without UV, names must not leave the device, so the on-Flipper chooser stays.
+  Test: `tests/native/protocol/subsystems/ctap/command_tests.inc`
+  (`test_get_assertion_uv_multi_match_lets_platform_pick`), registered in `runner.c`.
+- `README.md`: picker row in the fork table, usage notes (English and Russian).
+
+### Verification (2026-11-06)
+
+- Host: all native suites pass; the new test fails without the change.
+- Device (Momentum mntm-012, Windows 11, webauthn.io): two accounts registered with a PIN;
+  sign-in without a user name — one OK on the Flipper, Windows listed both accounts.
