@@ -30,6 +30,7 @@
 #include "nfc_protocol.h"
 #include "nfc_session.h"
 #include "nfc_trace.h"
+#include "nfc_xlog.h"
 
 #define ZF_NFC_DESFIRE_CMD_GET_VERSION 0x60U
 #define ZF_NFC_ATS_T0_TA1 0x10U
@@ -554,6 +555,7 @@ static bool zf_transport_nfc_send_ats(ZfNfcTransportState *state) {
 static NfcCommand zf_transport_nfc_handle_rats_locked(ZerofidoApp *app, ZfNfcTransportState *state,
                                                       const uint8_t *frame, size_t frame_len) {
     bool sent = false;
+    zf_nfc_xlog_event("rats");
     state->applet_selected = false;
     state->desfire_probe_frame = 0U;
     zf_transport_nfc_cancel_current_request_locked(state);
@@ -964,6 +966,7 @@ NfcCommand zf_transport_nfc_event_callback(NfcGenericEvent event, void *context)
 
         if (r_nack) {
             sent = zf_transport_nfc_replay_last_iso_response(state);
+            zf_nfc_xlog_event(sent ? "nak-replay" : "nak-noreplay");
         } else if (state->iso4_tx_chain_active) {
             sent = zf_transport_nfc_send_next_tx_chain_block(state);
             chain_ack_sent = sent;

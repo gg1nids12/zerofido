@@ -100,12 +100,13 @@ static inline void zf_transport_nfc_trace_apdu_tx(const uint8_t *data, size_t da
 }
 
 #else
+#include "nfc_xlog.h"
 #define zf_transport_nfc_trace_bind(...) ((void)0)
 #define zf_transport_nfc_trace_unbind(...) ((void)0)
 #define zf_transport_nfc_trace_drain(...) ((void)0)
 #define zf_transport_nfc_trace_format(...) ((void)0)
 #define zf_transport_nfc_trace_bytes(...) ((void)0)
-#define zf_transport_nfc_trace_event(...) ((void)0)
+#define zf_transport_nfc_trace_event(event) zf_nfc_xlog_event(event)
 #define zf_transport_nfc_trace_apdu_header(...) ((void)0)
 #define zf_transport_nfc_trace_apdu_status(...) ((void)0)
 #define zf_transport_nfc_trace_apdu_tx(...) ((void)0)

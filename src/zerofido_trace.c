@@ -19,7 +19,7 @@
 #include "zerofido_types.h"
 
 #define ZF_TRACE_PATH ZF_APP_DATA_DIR "/trace.txt"
-#define ZF_TRACE_MAX_BYTES 4096U
+#define ZF_TRACE_MAX_BYTES 16384U
 
 void zf_trace(Storage *storage, const char *fmt, ...) {
     char line[112];

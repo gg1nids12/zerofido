@@ -37,6 +37,7 @@
 #include "nfc_protocol.h"
 #include "nfc_session.h"
 #include "nfc_trace.h"
+#include "nfc_xlog.h"
 
 #define ZF_NFC_DIAG_EVENT(text) zf_transport_nfc_trace_event((text))
 
@@ -589,6 +590,10 @@ static bool zf_transport_nfc_handle_apdu_internal(ZerofidoApp *app, ZfNfcTranspo
     }
 
     raw_cla = apdu_bytes[0];
+    zf_nfc_xlog_rx(raw_cla, apdu.ins, apdu.p1, apdu.p2, apdu.data_len,
+                   (apdu.data && apdu.data_len > 0U && !state->command_chain_active) ? apdu.data[0]
+                                                                                    : 0U,
+                   apdu.extended, apdu.chained);
     if (apdu.cla == 0x00U && apdu.ins == 0xA4U && apdu.p1 == 0x04U &&
         (apdu.p2 == 0x00U || apdu.p2 == 0x0CU) && apdu.data_len == ZF_NFC_NDEF_AID_LEN &&
         memcmp(apdu.data, zf_transport_nfc_ndef_aid, ZF_NFC_NDEF_AID_LEN) == 0) {

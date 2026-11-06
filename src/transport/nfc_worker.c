@@ -39,6 +39,7 @@
 #include "nfc_iso_dep.h"
 #include "nfc_session.h"
 #include "nfc_trace.h"
+#include "nfc_xlog.h"
 #include "usb_hid_session.h"
 
 #if defined(ZF_RELEASE_DIAGNOSTICS) && ZF_RELEASE_DIAGNOSTICS && !defined(ZF_HOST_TEST)
@@ -367,6 +368,8 @@ int32_t zf_transport_nfc_worker(void *context) {
     nfc_listener_stop(state->listener);
     zf_transport_nfc_trace_drain(state->trace_queue);
     zf_transport_nfc_trace_unbind(state->trace_queue);
+    zf_nfc_xlog_session_end();
+    zf_nfc_xlog_flush(app->storage);
     zf_transport_nfc_on_disconnect(app);
     furi_mutex_acquire(app->ui_mutex, FuriWaitForever);
     if (app->transport_state == state) {

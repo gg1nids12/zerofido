@@ -35,6 +35,7 @@
 #include "../zerofido_ui_i.h"
 #include "status.h"
 #include "../app/lifecycle.h"
+#include "../transport/nfc_xlog.h"
 #if ZF_BLE_ENABLED && !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
 #include "../transport/ble_link.h"
 #endif
@@ -1743,6 +1744,7 @@ static void zerofido_tick_callback(void *context) {
 
     furi_assert(app);
     zf_vault_tick(); /* tpm branch: wipe the PMK after its timeout */
+    zf_nfc_xlog_flush(app->storage); /* tpm branch: light NFC log after a tap */
     zerofido_auto_transport_tick(app);
     zf_app_lifecycle_startup_pending(app);
     if (zerofido_ui_expire_pending_interaction(app)) {

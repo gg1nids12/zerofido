@@ -29,6 +29,7 @@
 
 #include "nfc_protocol.h"
 #include "nfc_trace.h"
+#include "nfc_xlog.h"
 
 static ZfNfcReaderProfile zf_transport_nfc_default_reader_profile(ZfNfcReaderProfileKind kind) {
     ZfNfcReaderProfile profile = {
@@ -236,6 +237,12 @@ bool zf_transport_nfc_send_iso_response(ZfNfcTransportState *state, const uint8_
             zf_transport_nfc_trace_bytes("apdu-tx", data, data_len);
         }
     }
+    if (chaining) {
+        zf_nfc_xlog_event(sent ? "chain" : "chain-fail");
+    } else if (data_len >= 2U) {
+        zf_nfc_xlog_tx(sent ? (uint16_t)((data[data_len - 2U] << 8) | data[data_len - 1U]) : 0U,
+                       data_len - 2U);
+    }
     return sent;
 }
 
@@ -294,6 +301,7 @@ bool zf_transport_nfc_send_wtx(ZfNfcTransportState *state) {
     if (!state) {
         return false;
     }
+    zf_nfc_xlog_event("wtx");
 
     frame[frame_len++] = (uint8_t)(0xF2U | (state->iso_cid_present ? ZF_NFC_PCB_CID : 0U));
     if (state->iso_cid_present) {
@@ -486,6 +494,7 @@ bool zf_transport_nfc_send_apdu_payload(ZfNfcTransportState *state, const uint8_
         state->iso_pcb ^= 0x01U;
         zf_transport_nfc_trace_apdu_tx(data, data_len, status_word);
     }
+    zf_nfc_xlog_tx(sent ? status_word : 0U, data_len);
     return sent;
 }
 

@@ -29,6 +29,7 @@
 #include "../zerofido_ui.h"
 #include "../zerofido_ui_i.h"
 #include "nfc_iso_dep.h"
+#include "nfc_xlog.h"
 
 #if defined(ZF_RELEASE_DIAGNOSTICS) && ZF_RELEASE_DIAGNOSTICS && !defined(ZF_HOST_TEST)
 #define ZF_NFC_MEM_DIAG(event) zf_telemetry_log(event)
@@ -191,6 +192,7 @@ void zf_transport_nfc_on_disconnect(ZerofidoApp *app) {
     }
 
     ZF_NFC_MEM_DIAG("nfc field disconnect before");
+    zf_nfc_xlog_session_end();
     furi_mutex_acquire(app->ui_mutex, FuriWaitForever);
     state = zf_app_nfc_transport_state(app);
     if (!state) {
