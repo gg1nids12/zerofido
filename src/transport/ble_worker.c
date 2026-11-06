@@ -54,13 +54,22 @@ static void zf_ble_worker_serve(ZerofidoApp *app, ZfBleLink *link) {
         return;
     }
 
+    /*
+     * The link is marked idle before the reply goes out: a client may send the
+     * next request as soon as it sees the reply (Windows does), and frames that
+     * arrive while busy are dropped. New requests land in the link's own buffer,
+     * so the reply still in the arena is safe.
+     */
     if (cmd == ZF_BLE_CMD_PING) {
+        zf_ble_link_end_request(link);
         (void)zf_ble_link_send(link, ZF_BLE_CMD_PING, app->transport_arena, len);
     } else if (len == 0U) {
+        zf_ble_link_end_request(link);
         error = ZF_BLE_ERR_INVALID_LEN;
         (void)zf_ble_link_send(link, ZF_BLE_CMD_ERROR, &error, 1);
     } else {
         uint32_t started = furi_get_tick();
+        uint32_t elapsed = 0;
         uint8_t ctap_cmd = app->transport_arena[0];
 
         g_zf_ble.session_id++;
@@ -74,6 +83,8 @@ static void zf_ble_worker_serve(ZerofidoApp *app, ZfBleLink *link) {
             app->transport_arena[0] = ZF_CTAP_ERR_KEEPALIVE_CANCEL;
             out = 1;
         }
+        elapsed = furi_get_tick() - started;
+        zf_ble_link_end_request(link);
         if (out == 0U) {
             error = ZF_BLE_ERR_OTHER;
             (void)zf_ble_link_send(link, ZF_BLE_CMD_ERROR, &error, 1);
@@ -82,10 +93,9 @@ static void zf_ble_worker_serve(ZerofidoApp *app, ZfBleLink *link) {
         }
         ZF_TRACE(app->storage, "BLE cmd=%02X len=%u status=%02X out=%u ms=%lu", ctap_cmd,
                  (unsigned)len, out ? app->transport_arena[0] : 0xFFU, (unsigned)out,
-                 (unsigned long)(furi_get_tick() - started));
+                 (unsigned long)elapsed);
         zerofido_ui_refresh_status(app);
     }
-    zf_ble_link_end_request(link);
     zf_app_transport_arena_wipe(app);
 }
 

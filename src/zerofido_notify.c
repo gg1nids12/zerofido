@@ -26,6 +26,55 @@
 #define ZF_NOTIFY_SUCCESS_MS 350
 #define ZF_NOTIFY_ERROR_MS 500
 
+/*
+ * tpm branch (2026-11-05): when OK is needed the owner wants a few seconds of
+ * vibration and a clear light. A timer drives both, so pressing OK (or deny,
+ * timeout, cancel) stops them at once: 4 vibration pulses over ~3 s, and the
+ * LED blinks blue until the request is answered. The Flipper vibration setting
+ * is respected.
+ */
+#define ZF_PROMPT_TICK_MS 375U
+#define ZF_PROMPT_VIBRO_PULSES 4U
+
+static FuriTimer *zf_prompt_timer;
+static NotificationApp *zf_prompt_notifications;
+static uint32_t zf_prompt_tick;
+
+static const NotificationSequence zf_sequence_prompt_pulse = {
+    &message_vibro_on, &message_delay_250, &message_vibro_off, NULL,
+};
+
+static const NotificationSequence zf_sequence_prompt_led_on = {
+    &message_red_0, &message_green_0, &message_blue_255, &message_do_not_reset, NULL,
+};
+
+static const NotificationSequence zf_sequence_prompt_led_off = {
+    &message_blue_0, &message_do_not_reset, NULL,
+};
+
+static void zf_prompt_timer_callback(void *context) {
+    UNUSED(context);
+    uint32_t tick = zf_prompt_tick++;
+
+    if (!zf_prompt_notifications) {
+        return;
+    }
+    if (tick & 1U) {
+        notification_message(zf_prompt_notifications, &zf_sequence_prompt_led_off);
+    } else {
+        notification_message(zf_prompt_notifications, &zf_sequence_prompt_led_on);
+    }
+    if ((tick & 1U) == 0U && tick / 2U < ZF_PROMPT_VIBRO_PULSES) {
+        notification_message(zf_prompt_notifications, &zf_sequence_prompt_pulse);
+    }
+}
+
+static void zf_prompt_stop(void) {
+    if (zf_prompt_timer) {
+        furi_timer_stop(zf_prompt_timer);
+    }
+}
+
 static const NotificationSequence zf_sequence_idle_dark = {
     &message_red_0, &message_green_0, &message_blue_0, &message_do_not_reset, NULL,
 };
@@ -117,6 +166,7 @@ static bool zf_notify_should_vibrate(const ZerofidoApp *app) {
 }
 
 static void zf_notify_prepare_transient(ZerofidoApp *app) {
+    zf_prompt_stop();
     zf_notify_stop_timer(app);
     zf_notify_clear_async(app);
 }
@@ -130,6 +180,8 @@ bool zerofido_notify_init(ZerofidoApp *app) {
     if (!app->notify_timer) {
         return false;
     }
+    zf_prompt_notifications = app->notifications;
+    zf_prompt_timer = furi_timer_alloc(zf_prompt_timer_callback, FuriTimerTypePeriodic, NULL);
 
     zf_notify_apply_idle_state(app, true);
     return true;
@@ -140,8 +192,14 @@ void zerofido_notify_deinit(ZerofidoApp *app) {
         return;
     }
 
+    zf_prompt_stop();
+    if (zf_prompt_timer) {
+        furi_timer_free(zf_prompt_timer);
+        zf_prompt_timer = NULL;
+    }
     zf_notify_stop_timer(app);
     zf_notify_clear(app);
+    zf_prompt_notifications = NULL;
     furi_timer_free(app->notify_timer);
     app->notify_timer = NULL;
 }
@@ -153,8 +211,13 @@ void zerofido_notify_prompt(ZerofidoApp *app) {
 
     zf_notify_prepare_transient(app);
     notification_message(app->notifications, &sequence_display_backlight_on);
-    notification_message(app->notifications, &sequence_single_vibro);
-    notification_message(app->notifications, &sequence_blink_start_magenta);
+    if (zf_prompt_timer && zf_notify_should_vibrate(app)) {
+        zf_prompt_tick = 0;
+        zf_prompt_timer_callback(NULL); /* first pulse and light right away */
+        furi_timer_start(zf_prompt_timer, ZF_PROMPT_TICK_MS);
+    } else {
+        notification_message(app->notifications, &sequence_blink_start_magenta);
+    }
 }
 
 void zerofido_notify_wink(ZerofidoApp *app) {
@@ -194,6 +257,7 @@ void zerofido_notify_error(ZerofidoApp *app) {
 }
 
 void zerofido_notify_reset(ZerofidoApp *app) {
+    zf_prompt_stop();
     zf_notify_stop_timer(app);
     zf_notify_clear(app);
 }
