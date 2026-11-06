@@ -1691,9 +1691,11 @@ static void zerofido_auto_transport_tick(ZerofidoApp *app) {
         busy = app->approval.state == ZfApprovalPending || app->maintenance_busy ||
                !app->startup_complete;
         /*
-         * Review 2026-11-06: with the cable in a PC, USB wins. Windows may ask
-         * every authenticator at once; a BLE request must not stop the USB
-         * worker in the middle of a USB sign-in. Stale BLE requests expire.
+         * Review 2026-11-06: while a PC is using the USB key (the USB link is
+         * awake, not suspended), USB wins. Windows may ask every authenticator
+         * at once; a BLE request must not stop the USB worker in the middle of
+         * a USB sign-in. An idle PC suspends the USB key after a few seconds,
+         * and then BLE may take a request. Stale BLE requests expire.
          */
         usb_host = mode == ZfTransportModeUsbHid && app->transport_connected;
         furi_mutex_release(app->ui_mutex);
