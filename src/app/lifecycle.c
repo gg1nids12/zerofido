@@ -168,8 +168,10 @@ static ZfStorageInitStatus zf_app_lifecycle_init_storage(ZerofidoApp *app) {
 #if !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
 static const ZfTransportAdapterOps *zf_app_lifecycle_adapter_for_mode(ZfTransportMode mode) {
     switch (mode) {
+#if ZF_NFC_ENABLED
     case ZfTransportModeNfc:
         return &zf_transport_nfc_adapter;
+#endif
 #if ZF_BLE_ENABLED
     case ZfTransportModeBle:
         return &zf_transport_ble_adapter;

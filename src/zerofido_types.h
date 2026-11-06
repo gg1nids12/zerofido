@@ -26,6 +26,11 @@
 #define ZF_APP_DATA_ROOT "/ext/apps_data"
 #define ZF_APP_DATA_DIR ZF_APP_DATA_ROOT "/" ZF_APP_ID
 
+/* tpm branch: NFC in the universal build (application.fam; off by default there). */
+#ifndef ZF_NFC_ENABLED
+#define ZF_NFC_ENABLED 1
+#endif
+
 /* tpm branch: Bluetooth LE transport (set by application.fam). */
 #ifndef ZF_BLE_ENABLED
 #define ZF_BLE_ENABLED 0

@@ -52,7 +52,7 @@ static bool zf_transport_mode_is_valid(uint8_t mode) {
 #elif defined(ZF_NFC_ONLY)
     return mode == ZfTransportModeNfc;
 #else
-    return mode == ZfTransportModeUsbHid || mode == ZfTransportModeNfc;
+    return mode == ZfTransportModeUsbHid || (ZF_NFC_ENABLED && mode == ZfTransportModeNfc);
 #endif
 }
 

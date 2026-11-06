@@ -32,9 +32,13 @@ ble_enabled = env_flag("ZEROFIDO_BLE", True) and profile == "full"
 # tpm branch (2026-11-06): lab build for NFC debugging — stays in NFC with the
 # cable plugged in, so the NFC trace can be read live over USB serial.
 nfc_lab = env_flag("ZEROFIDO_NFC_LAB", False)
+# tpm branch (2026-11-06): the owner turned NFC off in the universal build:
+# no cable -> Bluetooth, cable -> USB. Frees ~15 KB of code. ZEROFIDO_NFC=1
+# brings it back; the "nfc" profile always has it.
+nfc_enabled = profile == "nfc" or (profile == "full" and env_flag("ZEROFIDO_NFC", False))
 # tpm branch (2026-11-06): light NFC exchange log (headers and status words
 # only) into the service trace; fits the heap, unlike the full diagnostics.
-nfc_xlog = env_flag("ZEROFIDO_NFC_XLOG", True)
+nfc_xlog = env_flag("ZEROFIDO_NFC_XLOG", True) and nfc_enabled
 
 cdefines = [
     f"ZF_RELEASE_DIAGNOSTICS={1 if release_diagnostics else 0}",
@@ -47,6 +51,7 @@ cdefines = [
     f"ZF_BLE_ENABLED={1 if ble_enabled else 0}",
     f"ZF_NFC_LAB={1 if nfc_lab else 0}",
     f"ZF_NFC_XLOG={1 if nfc_xlog else 0}",
+    f"ZF_NFC_ENABLED={1 if nfc_enabled else 0}",
 ]
 sources = [
     "*.c",
@@ -98,7 +103,10 @@ elif profile == "nfc":
     requires.append("nfc")
     description = "FIDO2 for Flipper Zero"
 else:
-    requires.append("nfc")
+    if nfc_enabled:
+        requires.append("nfc")
+    else:
+        sources.append("!nfc_*.c")
     description = "FIDO2 for Flipper Zero"
 
 if not u2f_enabled:

@@ -40,7 +40,7 @@
 #include "../transport/ble_link.h"
 #endif
 
-#if !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
+#if !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY) && ZF_NFC_ENABLED
 #define ZF_HAS_TRANSPORT_SETTING 1
 #else
 #define ZF_HAS_TRANSPORT_SETTING 0
@@ -1733,7 +1733,11 @@ static void zerofido_auto_transport_tick(ZerofidoApp *app) {
         stable++;
         return;
     }
-    want = cable ? ZfTransportModeUsbHid : ZfTransportModeNfc;
+    /* Owner 2026-11-06: NFC off by default; no cable means Bluetooth. */
+    want = cable ? ZfTransportModeUsbHid
+                 : (ZF_NFC_ENABLED ? ZfTransportModeNfc
+                                   : (ZF_BLE_ENABLED && app->ble_link ? ZfTransportModeBle
+                                                                      : ZfTransportModeUsbHid));
     furi_mutex_acquire(app->ui_mutex, FuriWaitForever);
     busy = app->approval.state == ZfApprovalPending || app->maintenance_busy ||
            !app->startup_complete || app->runtime_config.transport_mode == want;
@@ -1742,7 +1746,9 @@ static void zerofido_auto_transport_tick(ZerofidoApp *app) {
         return;
     }
     bool ok = zf_app_lifecycle_switch_transport_runtime(app, want);
-    ZF_TRACE(app->storage, "AUTO mode=%s ok=%d free=%u maxblk=%u", cable ? "usb" : "nfc", ok ? 1 : 0,
+    ZF_TRACE(app->storage, "AUTO mode=%s ok=%d free=%u maxblk=%u",
+             want == ZfTransportModeUsbHid ? "usb" : want == ZfTransportModeNfc ? "nfc" : "ble",
+             ok ? 1 : 0,
              (unsigned)memmgr_get_free_heap(), (unsigned)memmgr_heap_get_max_free_block());
     zerofido_ui_refresh_status(app);
 #endif

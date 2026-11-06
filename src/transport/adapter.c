@@ -54,7 +54,7 @@ const ZfTransportAdapterOps zf_transport_usb_hid_adapter = {
 #endif
 
 /* NFC adapter publishes ISO7816 responses and handles GET RESPONSE polling. */
-#if !defined(ZF_USB_ONLY)
+#if !defined(ZF_USB_ONLY) && ZF_NFC_ENABLED
 const ZfTransportAdapterOps zf_transport_nfc_adapter = {
     .worker = zf_transport_nfc_worker,
     .worker_stack_size = 4 * 1024,

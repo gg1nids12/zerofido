@@ -267,7 +267,7 @@ static void zf_status_draw_callback(Canvas *canvas, void *model) {
         } else if (status->transport_mode == ZfTransportModeBle) {
             icon = &I_Connected_62x31;
             text = status->status == ZfHomeStatusConnected ? "Bluetooth connected" :
-                                                             "Bluetooth";
+                                                             "Bluetooth ready";
         } else if (status->status == ZfHomeStatusConnected) {
             icon = &I_Connected_62x31;
             text = "Connected!";

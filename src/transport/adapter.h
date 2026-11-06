@@ -47,7 +47,7 @@ void zf_transport_processing_keepalive(ZerofidoApp *app, ZfTransportSessionId cu
 #if !defined(ZF_NFC_ONLY) && !defined(ZF_USB_ONLY)
 extern const ZfTransportAdapterOps zf_transport_usb_hid_adapter;
 #endif
-#if !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
+#if !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY) && ZF_NFC_ENABLED
 extern const ZfTransportAdapterOps zf_transport_nfc_adapter;
 #endif
 #if ZF_BLE_ENABLED && !defined(ZF_USB_ONLY) && !defined(ZF_NFC_ONLY)
